@@ -43,7 +43,9 @@ async def create_game(game_data: GameCreate):
             "words": game_data.words,
             "categories": game_data.categories,
             "status": "active",
-            "current_round": 1
+            "current_round": 1,
+            "timer_start": "NOW()",
+            "timer_duration": 300  # 5 minutes in seconds
         }).execute()
         
         if result.data:
@@ -53,7 +55,9 @@ async def create_game(game_data: GameCreate):
                 "status": "created",
                 "words": game["words"],
                 "categories": game["categories"],
-                "current_round": game["current_round"]
+                "current_round": game["current_round"],
+                "timer_start": game["timer_start"],
+                "timer_duration": game["timer_duration"]
             }
         else:
             raise HTTPException(status_code=500, detail="Failed to create game")
@@ -107,6 +111,23 @@ async def get_game_state(game_id: str):
         
         game = game_result.data[0]
         
+        # Check if timer has expired and game is still active
+        if game['status'] == 'active' and game.get('timer_start') and game.get('timer_duration'):
+            # Calculate if time has expired using PostgreSQL
+            time_check = supabase.rpc('check_game_time_expired', {
+                'game_id_param': game_id,
+                'timer_start_param': game['timer_start'],
+                'timer_duration_param': game['timer_duration']
+            }).execute()
+            
+            if time_check.data and time_check.data[0].get('expired'):
+                # Mark game as completed due to timeout
+                supabase.table('games').update({
+                    'status': 'completed',
+                    'end_time': 'NOW()'
+                }).eq('id', game_id).execute()
+                game['status'] = 'completed'
+        
         # Get all players in the game
         players_result = supabase.table('players').select("*").eq('game_id', game_id).execute()
         players = players_result.data
@@ -119,7 +140,9 @@ async def get_game_state(game_id: str):
             "players": players,
             "start_time": game["start_time"],
             "end_time": game.get("end_time"),
-            "current_round": game.get("current_round", 1)
+            "current_round": game.get("current_round", 1),
+            "timer_start": game.get("timer_start"),
+            "timer_duration": game.get("timer_duration", 300)
         }
         
     except Exception as e:
@@ -183,13 +206,41 @@ async def player_select_words(game_id: str, player_id: str, selection: WordSelec
         if not game_result.data:
             raise HTTPException(status_code=404, detail="Game not found or not active")
         
+        game = game_result.data[0]
+        
+        # Check if timer has expired
+        if game.get('timer_start') and game.get('timer_duration'):
+            time_check = supabase.rpc('check_game_time_expired', {
+                'game_id_param': game_id,
+                'timer_start_param': game['timer_start'],
+                'timer_duration_param': game['timer_duration']
+            }).execute()
+            
+            if time_check.data and time_check.data[0].get('expired'):
+                # Mark game as completed due to timeout
+                supabase.table('games').update({
+                    'status': 'completed',
+                    'end_time': 'NOW()'
+                }).eq('id', game_id).execute()
+                
+                return {
+                    "correct": False,
+                    "message": "Time's up! Game has ended.",
+                    "category": None,
+                    "points_earned": 0,
+                    "new_score": 0,
+                    "round_mistakes": 0,
+                    "eliminated": False,
+                    "game_ended": True,
+                    "time_expired": True
+                }
+        
         # Check if player exists in this game
         player_result = supabase.table('players').select("*").eq('id', player_id).eq('game_id', game_id).execute()
         if not player_result.data:
             raise HTTPException(status_code=404, detail="Player not found in this game")
         
         player = player_result.data[0]
-        game = game_result.data[0]
         categories = game['categories']
         
         # Check if selection is exactly 4 words
@@ -202,7 +253,8 @@ async def player_select_words(game_id: str, player_id: str, selection: WordSelec
                 "new_score": player['score'],
                 "round_mistakes": player.get('round_mistakes', 0),
                 "eliminated": False,
-                "game_ended": False
+                "game_ended": False,
+                "time_expired": False
             }
         
         points_earned = 0
@@ -258,7 +310,8 @@ async def player_select_words(game_id: str, player_id: str, selection: WordSelec
             "new_score": new_score,
             "round_mistakes": round_mistakes,
             "eliminated": eliminated,
-            "game_ended": game_ended
+            "game_ended": game_ended,
+            "time_expired": False
         }
         
     except Exception as e:
@@ -269,15 +322,33 @@ async def start_next_round(game_id: str, game_data: GameCreate):
     try:
         supabase = get_supabase()
         
-        # Check if game exists
-        game_result = supabase.table('games').select("*").eq('id', game_id).execute()
+        # Check if game exists and is still active
+        game_result = supabase.table('games').select("*").eq('id', game_id).eq('status', 'active').execute()
         if not game_result.data:
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="Game not found or not active")
         
         game = game_result.data[0]
+        
+        # Check if timer has expired
+        if game.get('timer_start') and game.get('timer_duration'):
+            time_check = supabase.rpc('check_game_time_expired', {
+                'game_id_param': game_id,
+                'timer_start_param': game['timer_start'],
+                'timer_duration_param': game['timer_duration']
+            }).execute()
+            
+            if time_check.data and time_check.data[0].get('expired'):
+                # Mark game as completed due to timeout
+                supabase.table('games').update({
+                    'status': 'completed',
+                    'end_time': 'NOW()'
+                }).eq('id', game_id).execute()
+                
+                raise HTTPException(status_code=400, detail="Time's up! Cannot start next round.")
+        
         next_round = game.get('current_round', 1) + 1
         
-        # Update game with new round data
+        # Update game with new round data (but keep timer_start unchanged)
         supabase.table('games').update({
             'words': game_data.words,
             'categories': game_data.categories,
@@ -295,7 +366,9 @@ async def start_next_round(game_id: str, game_data: GameCreate):
             "status": "next_round_started",
             "current_round": next_round,
             "words": game_data.words,
-            "categories": game_data.categories
+            "categories": game_data.categories,
+            "timer_start": game['timer_start'],
+            "timer_duration": game.get('timer_duration', 300)
         }
         
     except Exception as e:

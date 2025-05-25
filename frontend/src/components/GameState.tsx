@@ -25,8 +25,24 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
   const [isEliminated, setIsEliminated] = useState(false);
   const [solvedCategoryNames, setSolvedCategoryNames] = useState<Set<string>>(new Set());
   const [solvedWords, setSolvedWords] = useState<string[]>([]);
+  const [timeRemaining, setTimeRemaining] = useState<number>(300); // 5 minutes in seconds
+  const [isTimeExpired, setIsTimeExpired] = useState(false);
   const MAX_MISTAKES = 3;
   const TOTAL_GROUPS = 4;
+
+  const formatTime = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  const calculateTimeRemaining = (timerStart: string, timerDuration: number): number => {
+    const startTime = new Date(timerStart).getTime();
+    const currentTime = new Date().getTime();
+    const elapsedSeconds = Math.floor((currentTime - startTime) / 1000);
+    const remaining = Math.max(0, timerDuration - elapsedSeconds);
+    return remaining;
+  };
 
   const fetchGameState = async () => {
     try {
@@ -34,6 +50,32 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
       if (response.ok) {
         const data = await response.json();
         setGameData(data);
+        
+        // Update timer if game is active
+        if (data.status === 'active' && data.timer_start && data.timer_duration) {
+          const remaining = calculateTimeRemaining(data.timer_start, data.timer_duration);
+          setTimeRemaining(remaining);
+          
+          if (remaining <= 0 && !isTimeExpired) {
+            setIsTimeExpired(true);
+            // Trigger game completion
+            setTimeout(() => {
+              fetch(`http://localhost:8000/games/${gameId}/complete`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+              })
+              .then(response => response.json())
+              .then(data => {
+                setGameResult(data);
+              })
+              .catch(error => {
+                console.error('Error fetching final results:', error);
+              });
+            }, 1000);
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching game state:', error);
@@ -43,6 +85,12 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
   };
 
   const startNextRound = async () => {
+    // Check if time expired before starting next round
+    if (timeRemaining <= 0) {
+      setIsTimeExpired(true);
+      return;
+    }
+
     // Sample game data for next round
     const gameData = {
       words: ["table", "chair", "desk", "sofa", "run", "walk", "jog", "sprint", "happy", "sad", "angry", "excited", "book", "pen", "paper", "eraser"],
@@ -65,12 +113,17 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
 
       if (response.ok) {
         const result = await response.json();
-        // Reset round-specific state
+        // Reset round-specific state but keep timer running
         setIsEliminated(false);
         setSolvedCategoryNames(new Set());
         setSolvedWords([]);
         setLastResult(null);
         fetchGameState();
+      } else {
+        const error = await response.json();
+        if (error.detail.includes("Time's up")) {
+          setIsTimeExpired(true);
+        }
       }
     } catch (error) {
       console.error('Error starting next round:', error);
@@ -84,7 +137,12 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
       setIsEliminated(true);
     }
     
-    // If the game ended due to elimination, show game over immediately
+    // Check if time expired
+    if (result.time_expired) {
+      setIsTimeExpired(true);
+    }
+    
+    // If the game ended due to elimination or time expiry, show game over immediately
     if (result.game_ended) {
       // Fetch final results
       setTimeout(() => {
@@ -101,7 +159,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
         .catch(error => {
           console.error('Error fetching final results:', error);
         });
-      }, 2000); // Show elimination message for 2 seconds first
+      }, 2000); // Show message for 2 seconds first
     }
     
     if (result.correct && result.category) {
@@ -128,6 +186,29 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
     fetchGameState();
   };
 
+  // Timer effect - updates every second when game is active
+  useEffect(() => {
+    let timerInterval: ReturnType<typeof setInterval> | undefined;
+    
+    if (gameData?.status === 'active' && gameData?.timer_start && gameData?.timer_duration && !isTimeExpired) {
+      timerInterval = setInterval(() => {
+        const remaining = calculateTimeRemaining(gameData.timer_start, gameData.timer_duration);
+        setTimeRemaining(remaining);
+        
+        if (remaining <= 0) {
+          setIsTimeExpired(true);
+          clearInterval(timerInterval);
+        }
+      }, 1000);
+    }
+    
+    return () => {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+      }
+    };
+  }, [gameData, isTimeExpired]);
+
   useEffect(() => {
     fetchGameState();
     const interval = setInterval(fetchGameState, 5000);
@@ -138,6 +219,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
     setIsEliminated(false);
     setSolvedCategoryNames(new Set());
     setSolvedWords([]);
+    setIsTimeExpired(false);
   }, [gameId]);
 
   if (loading) {
@@ -157,6 +239,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
 
   // Check if round is complete (all groups solved or player eliminated)
   const isRoundComplete = solvedGroupsCount >= TOTAL_GROUPS || isEliminated;
+  const isGameOver = gameData.status === 'completed' || isEliminated || isTimeExpired;
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
@@ -164,8 +247,21 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
         <div className="text-center mb-6">
           <h2 className="text-3xl font-bold mb-2 bg-yellow-200 inline-block px-2">SpeedConnect Game</h2>
           <p className="text-lg font-semibold">Round {currentRound}</p>
-          <p className={`text-gray-600 ${gameData.status === 'completed' || isEliminated ? 'font-bold' : ''}`}>
-            Status: {gameData.status === 'completed' ? 'Game Over' : isEliminated ? 'Eliminated - Game Over' : 'Active'}
+          
+          {/* Timer Display */}
+          <div className={`text-2xl font-bold mb-2 ${
+            timeRemaining <= 60 ? 'text-red-600 animate-pulse' : 
+            timeRemaining <= 120 ? 'text-orange-600' : 'text-green-600'
+          }`}>
+            Time: {formatTime(timeRemaining)}
+          </div>
+          
+          <p className={`text-gray-600 ${isGameOver ? 'font-bold' : ''}`}>
+            Status: {
+              isTimeExpired ? 'Time Up - Game Over' :
+              gameData.status === 'completed' ? 'Game Over' : 
+              isEliminated ? 'Eliminated - Game Over' : 'Active'
+            }
           </p>
           <p className="text-sm text-gray-500">Game ID: {gameId}</p>
         </div>
@@ -174,7 +270,9 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
         {gameResult && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
-              <h3 className="text-xl font-bold mb-4 text-center text-red-600">Game Over!</h3>
+              <h3 className="text-xl font-bold mb-4 text-center text-red-600">
+                {isTimeExpired ? 'Time\'s Up!' : 'Game Over!'}
+              </h3>
               
               {gameResult.winner && (
                 <div className="text-center mb-4">
@@ -209,14 +307,14 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
         {lastResult && (
           <div className={`text-center mb-6 p-4 rounded-lg ${
             lastResult.correct ? 'bg-green-100 text-green-800' : 
-            lastResult.game_ended ? 'bg-red-200 text-red-900 font-bold' :
+            lastResult.game_ended || lastResult.time_expired ? 'bg-red-200 text-red-900 font-bold' :
             lastResult.eliminated ? 'bg-red-200 text-red-900' : 'bg-red-100 text-red-800'
           }`}>
             <p className="font-semibold">{lastResult.message}</p>
             {lastResult.points_earned > 0 && (
               <p>+{lastResult.points_earned} points! New score: {lastResult.new_score}</p>
             )}
-            {lastResult.game_ended && (
+            {(lastResult.game_ended || lastResult.time_expired) && (
               <p className="mt-2">The game has ended. Final results coming up...</p>
             )}
           </div>
@@ -235,8 +333,8 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
               <p>Solved Groups: {solvedGroupsCount} / {TOTAL_GROUPS}</p>
             </div>
 
-            {/* Round Complete View - Only show if game is still active */}
-            {isRoundComplete && gameData.status === 'active' && !isEliminated ? (
+            {/* Round Complete View - Only show if game is still active and time hasn't expired */}
+            {isRoundComplete && gameData.status === 'active' && !isEliminated && !isTimeExpired && timeRemaining > 0 ? (
               <div className="bg-white rounded-lg p-4 mb-6 shadow">
                 <div className="text-center py-6">
                   <h3 className="text-xl font-bold mb-2">Round {currentRound} Complete!</h3>
@@ -260,7 +358,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
                   </div>
                 )}
               </div>
-            ) : gameData.status === 'active' && !isEliminated ? (
+            ) : gameData.status === 'active' && !isEliminated && !isTimeExpired && timeRemaining > 0 ? (
               // Active Game View
               <>
                 <div className="bg-white rounded-lg p-4 mb-6 shadow">
@@ -274,13 +372,15 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
                 </div>
                 <GameCompletion gameId={gameId} onGameCompleted={handleGameCompleted} />
               </>
-            ) : gameData.status === 'completed' || isEliminated ? (
+            ) : isGameOver ? (
               // Game Over View
               <div className="bg-white rounded-lg p-4 mb-6 shadow">
                 <div className="text-center py-6">
                   <h3 className="text-xl font-bold mb-2 text-red-600">Game Over</h3>
                   <p className="mb-4">
-                    {isEliminated 
+                    {isTimeExpired 
+                      ? "Time's up! The 5-minute timer has expired." 
+                      : isEliminated 
                       ? "You made 3 mistakes and were eliminated. The game has ended." 
                       : "This game has ended. Check out the solutions below!"
                     }
