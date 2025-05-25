@@ -5,7 +5,7 @@ interface WordSelectionProps {
   gameId: string;
   playerId: string;
   onSelectionResult: (result: any) => void;
-  solvedWords?: string[]; // Add this new prop
+  solvedWords?: string[];
 }
 
 const WordSelection: React.FC<WordSelectionProps> = ({ 
@@ -13,13 +13,12 @@ const WordSelection: React.FC<WordSelectionProps> = ({
   gameId, 
   playerId, 
   onSelectionResult,
-  solvedWords = [] // Default to empty array
+  solvedWords = []
 }) => {
   const [selectedWords, setSelectedWords] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const toggleWord = (word: string) => {
-    // Don't allow selecting solved words
     if (solvedWords.includes(word)) return;
     
     if (selectedWords.includes(word)) {
@@ -54,61 +53,89 @@ const WordSelection: React.FC<WordSelectionProps> = ({
     }
   };
 
-  const clearSelection = () => {
-    setSelectedWords([]);
-  };
-
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <h3 className="text-xl font-bold mb-4 text-center">Select 4 Words</h3>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* 4x4 Word Grid using CSS Grid */}
+      <div style={{
+        flex: 1,
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '12px',
+        padding: '16px',
+        minHeight: '400px'
+      }}>
+        {words.map((word, index) => (
+          <button
+            key={index}
+            onClick={() => toggleWord(word)}
+            disabled={isSubmitting || solvedWords.includes(word)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              textAlign: 'center',
+              minHeight: '80px',
+              fontSize: '18px',
+              fontWeight: '600',
+              borderRadius: '8px',
+              transition: 'all 0.2s',
+              cursor: (isSubmitting || solvedWords.includes(word)) ? 'not-allowed' : 'pointer',
+              opacity: (isSubmitting || solvedWords.includes(word)) ? 0.5 : 1,
+              backgroundColor: selectedWords.includes(word) 
+                ? '#3b82f6' 
+                : solvedWords.includes(word)
+                ? '#bbf7d0'
+                : '#f3f4f6',
+              color: selectedWords.includes(word) 
+                ? 'white' 
+                : solvedWords.includes(word)
+                ? '#6b7280'
+                : '#1f2937',
+              border: 'none'
+            }}
+            onMouseEnter={(e) => {
+              if (!selectedWords.includes(word) && !solvedWords.includes(word) && !isSubmitting) {
+                e.currentTarget.style.backgroundColor = '#e5e7eb';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!selectedWords.includes(word) && !solvedWords.includes(word)) {
+                e.currentTarget.style.backgroundColor = '#f3f4f6';
+              }
+            }}
+          >
+            {word}
+          </button>
+        ))}
+      </div>
       
-      {/* Selected words counter */}
-      <div className="text-center mb-4">
-        <span className="text-sm text-gray-600">
-          Selected: {selectedWords.length}/4
-        </span>
-      </div>
-
-      {/* Words grid */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
-        {words.map((word, index) => {
-          const isSolved = solvedWords.includes(word);
-          return (
-            <button
-              key={index}
-              onClick={() => toggleWord(word)}
-              disabled={isSubmitting || isSolved}
-              className={`
-                p-3 rounded-lg font-medium transition-all duration-200
-                ${selectedWords.includes(word) 
-                  ? 'bg-blue-500 text-white shadow-lg transform scale-105' 
-                  : isSolved
-                    ? 'bg-gray-200 text-gray-500 line-through opacity-70' // Style for solved words
-                    : 'bg-white text-gray-800 shadow hover:shadow-md hover:bg-gray-50'}
-                ${(isSubmitting || isSolved) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-              `}
-            >
-              {word}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Action buttons */}
-      <div className="flex justify-center space-x-4">
-        <button
-          onClick={clearSelection}
-          disabled={selectedWords.length === 0 || isSubmitting}
-          className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Clear
-        </button>
+      {/* Submit button */}
+      <div style={{ textAlign: 'center', paddingTop: '16px', flexShrink: 0 }}>
         <button
           onClick={submitSelection}
           disabled={selectedWords.length !== 4 || isSubmitting}
-          className="px-6 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{
+            backgroundColor: selectedWords.length === 4 && !isSubmitting ? '#2563eb' : '#9ca3af',
+            color: 'white',
+            fontWeight: 'bold',
+            padding: '12px 32px',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: selectedWords.length === 4 && !isSubmitting ? 'pointer' : 'not-allowed',
+            fontSize: '16px'
+          }}
+          onMouseEnter={(e) => {
+            if (selectedWords.length === 4 && !isSubmitting) {
+              e.currentTarget.style.backgroundColor = '#1d4ed8';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (selectedWords.length === 4 && !isSubmitting) {
+              e.currentTarget.style.backgroundColor = '#2563eb';
+            }
+          }}
         >
-          {isSubmitting ? 'Submitting...' : 'Submit'}
+          {isSubmitting ? 'Submitting...' : 'Submit Group'}
         </button>
       </div>
     </div>

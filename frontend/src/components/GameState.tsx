@@ -320,74 +320,64 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
           </div>
         )}
 
-        {/* Layout with Game + Leaderboard */}
-        <div style={{ display: 'flex', flexDirection: 'row' }}>
-          {/* Left Column - Game Play */}
-          <div style={{ width: '66%', paddingRight: '16px' }}>
-            {/* Current Player Info */}
-            <div className="bg-blue-100 rounded-lg p-4 mb-6">
-              <h3 className="text-lg font-semibold mb-2">You</h3>
-              <p>Name: {currentPlayer.name}</p>
-              <p>Score: {displayScore}</p>
-              <p>Round {currentRound} Mistakes: {roundMistakes} / {MAX_MISTAKES}</p>
-              <p>Solved Groups: {solvedGroupsCount} / {TOTAL_GROUPS}</p>
-            </div>
-
-            {/* Round Complete View - Only show if game is still active and time hasn't expired */}
-            {isRoundComplete && gameData.status === 'active' && !isEliminated && !isTimeExpired && timeRemaining > 0 ? (
-              <div className="bg-white rounded-lg p-4 mb-6 shadow">
-                <div className="text-center py-6">
-                  <h3 className="text-xl font-bold mb-2">Round {currentRound} Complete!</h3>
-                  <p className="mb-4 text-green-600">You solved all groups!</p>
-                  <button
-                    onClick={startNextRound}
-                    className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4"
-                  >
-                    Start Round {currentRound + 1}
-                  </button>
+        {/* Two-part Layout: Compact Info + Large Word Grid */}
+        <div className="h-screen flex flex-col p-4">
+          {/* Top Info Section - Compact (~10-15% of screen) */}
+          <div className="bg-blue-100 rounded-lg p-3 mb-4 flex-shrink-0">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-base font-semibold">{currentPlayer.name}</h3>
+                <p className="text-sm">Score: {displayScore}</p>
+              </div>
+              <div className="text-right">
+                <div className="text-xl font-bold">
+                  {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
                 </div>
-                {gameData?.categories && (
-                  <div className="space-y-2 mt-6">
-                    <h3 className="text-lg font-semibold mb-4">Round {currentRound} Solutions</h3>
-                    {gameData.categories.map((category: any, index: number) => (
-                      <div key={index} className="p-3 bg-yellow-50 rounded mb-2">
-                        <h4 className="font-medium">{category.name}</h4>
-                        <p className="text-sm text-gray-600">{category.words.join(', ')}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <p className="text-sm">Round {currentRound}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Word Grid Section - Takes up remaining space (~80-85%) */}
+          <div className="flex-1 flex flex-col">
+            {isRoundComplete && gameData.status === 'active' && !isEliminated && !isTimeExpired && timeRemaining > 0 ? (
+              <div className="bg-white rounded-lg p-6 shadow text-center flex-1 flex flex-col justify-center">
+                <h3 className="text-xl font-bold mb-4">Round {currentRound} Complete!</h3>
+                <p className="mb-4 text-green-600">You solved all groups!</p>
+                <button
+                  onClick={startNextRound}
+                  className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                >
+                  Start Round {currentRound + 1}
+                </button>
               </div>
             ) : gameData.status === 'active' && !isEliminated && !isTimeExpired && timeRemaining > 0 ? (
-              // Active Game View
-              <>
-                <div className="bg-white rounded-lg p-4 mb-6 shadow">
-                  <WordSelection
-                    words={gameData.words}
-                    gameId={gameId}
-                    playerId={currentPlayer.player_id}
-                    onSelectionResult={handleSelectionResult}
-                    solvedWords={solvedWords}
-                  />
-                </div>
-                <GameCompletion gameId={gameId} onGameCompleted={handleGameCompleted} />
-              </>
+              // Active Game - 4x4 Word Grid taking full available space
+              <div className="bg-white rounded-lg p-6 shadow flex-1">
+                <WordSelection
+                  words={gameData.words}
+                  gameId={gameId}
+                  playerId={currentPlayer.player_id}
+                  onSelectionResult={handleSelectionResult}
+                  solvedWords={solvedWords}
+                />
+              </div>
             ) : isGameOver ? (
               // Game Over View
-              <div className="bg-white rounded-lg p-4 mb-6 shadow">
-                <div className="text-center py-6">
+              <div className="bg-white rounded-lg p-6 shadow flex-1 overflow-y-auto">
+                <div className="text-center mb-6">
                   <h3 className="text-xl font-bold mb-2 text-red-600">Game Over</h3>
                   <p className="mb-4">
                     {isTimeExpired 
                       ? "Time's up! The 5-minute timer has expired." 
                       : isEliminated 
-                      ? "You made 3 mistakes and were eliminated. The game has ended." 
-                      : "This game has ended. Check out the solutions below!"
+                      ? "You made 3 mistakes and were eliminated." 
+                      : "This game has ended."
                     }
                   </p>
                 </div>
-                <div className="space-y-2 mt-6">
-                  <h3 className="text-lg font-semibold mb-4">Round {currentRound} Solutions</h3>
+                <div className="space-y-2">
+                  <h3 className="text-lg font-semibold mb-4">Solutions</h3>
                   {gameData.categories.map((category: any, index: number) => (
                     <div key={index} className="p-3 bg-yellow-50 rounded mb-2">
                       <h4 className="font-medium">{category.name}</h4>
@@ -397,11 +387,6 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
                 </div>
               </div>
             ) : null}
-          </div>
-
-          {/* Right Column - Scoreboard */}
-          <div style={{ width: '34%' }}>
-            <ScoreBoard gameId={gameId} currentPlayerId={currentPlayer.player_id} />
           </div>
         </div>
 
