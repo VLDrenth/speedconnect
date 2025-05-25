@@ -24,6 +24,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
   const [mistakes, setMistakes] = useState(0);
   const [isGameOverByMistakes, setIsGameOverByMistakes] = useState(false);
   const [solvedCategoryNames, setSolvedCategoryNames] = useState<Set<string>>(new Set()); // Track solved category names
+  const [solvedWords, setSolvedWords] = useState<string[]>([]); // Track solved words
   const MAX_MISTAKES = 3;
   const TOTAL_GROUPS = 4; // Assuming 4 groups to solve
 
@@ -52,12 +53,21 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
     } else {
       // If selection is correct and a category name is provided,
       // it means a group was successfully identified.
-      if (result.category) { // Changed from result.category_name
+      if (result.category) {
+        // Update solved category names
         setSolvedCategoryNames(prevNames => {
           const newNames = new Set(prevNames);
-          newNames.add(result.category); // Changed from result.category_name
+          newNames.add(result.category);
           return newNames;
         });
+        
+        // Find the category in gameData and add its words to solvedWords
+        if (gameData && gameData.categories) {
+          const category = gameData.categories.find((cat: any) => cat.name === result.category);
+          if (category) {
+            setSolvedWords(prev => [...prev, ...category.words]);
+          }
+        }
       }
     }
     // Refresh game state to see updated scores, words, and overall game status
@@ -83,6 +93,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
     setMistakes(0);
     setIsGameOverByMistakes(false);
     setSolvedCategoryNames(new Set()); // Reset solved categories
+    setSolvedWords([]); // Reset solved words
   }, [gameId]);
 
   if (loading) {
@@ -197,6 +208,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
                     gameId={gameId}
                     playerId={currentPlayer.player_id}
                     onSelectionResult={handleSelectionResult}
+                    solvedWords={solvedWords} // Pass solved words to the component
                   />
                 </div>
                 <GameCompletion gameId={gameId} onGameCompleted={handleGameCompleted} />

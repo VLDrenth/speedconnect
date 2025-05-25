@@ -5,13 +5,23 @@ interface WordSelectionProps {
   gameId: string;
   playerId: string;
   onSelectionResult: (result: any) => void;
+  solvedWords?: string[]; // Add this new prop
 }
 
-const WordSelection: React.FC<WordSelectionProps> = ({ words, gameId, playerId, onSelectionResult }) => {
+const WordSelection: React.FC<WordSelectionProps> = ({ 
+  words, 
+  gameId, 
+  playerId, 
+  onSelectionResult,
+  solvedWords = [] // Default to empty array
+}) => {
   const [selectedWords, setSelectedWords] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const toggleWord = (word: string) => {
+    // Don't allow selecting solved words
+    if (solvedWords.includes(word)) return;
+    
     if (selectedWords.includes(word)) {
       setSelectedWords(selectedWords.filter(w => w !== word));
     } else if (selectedWords.length < 4) {
@@ -61,22 +71,27 @@ const WordSelection: React.FC<WordSelectionProps> = ({ words, gameId, playerId, 
 
       {/* Words grid */}
       <div className="grid grid-cols-4 gap-3 mb-6">
-        {words.map((word, index) => (
-          <button
-            key={index}
-            onClick={() => toggleWord(word)}
-            disabled={isSubmitting}
-            className={`
-              p-3 rounded-lg font-medium transition-all duration-200
-              ${selectedWords.includes(word) 
-                ? 'bg-blue-500 text-white shadow-lg transform scale-105' 
-                : 'bg-white text-gray-800 shadow hover:shadow-md hover:bg-gray-50'}
-              ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-            `}
-          >
-            {word}
-          </button>
-        ))}
+        {words.map((word, index) => {
+          const isSolved = solvedWords.includes(word);
+          return (
+            <button
+              key={index}
+              onClick={() => toggleWord(word)}
+              disabled={isSubmitting || isSolved}
+              className={`
+                p-3 rounded-lg font-medium transition-all duration-200
+                ${selectedWords.includes(word) 
+                  ? 'bg-blue-500 text-white shadow-lg transform scale-105' 
+                  : isSolved
+                    ? 'bg-gray-200 text-gray-500 line-through opacity-70' // Style for solved words
+                    : 'bg-white text-gray-800 shadow hover:shadow-md hover:bg-gray-50'}
+                ${(isSubmitting || isSolved) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+              `}
+            >
+              {word}
+            </button>
+          );
+        })}
       </div>
 
       {/* Action buttons */}
