@@ -21,6 +21,11 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
   const [loading, setLoading] = useState(true);
   const [lastResult, setLastResult] = useState<any>(null);
   const [gameResult, setGameResult] = useState<any>(null);
+  const [mistakes, setMistakes] = useState(0);
+  const [isGameOverByMistakes, setIsGameOverByMistakes] = useState(false);
+  const [solvedCategoryNames, setSolvedCategoryNames] = useState<Set<string>>(new Set()); // Track solved category names
+  const MAX_MISTAKES = 3;
+  const TOTAL_GROUPS = 4; // Assuming 4 groups to solve
 
   const fetchGameState = async () => {
     try {
@@ -38,7 +43,24 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
 
   const handleSelectionResult = (result: any) => {
     setLastResult(result);
-    // Refresh game state to see updated scores
+    if (!result.correct) {
+      const newMistakes = mistakes + 1;
+      setMistakes(newMistakes);
+      if (newMistakes >= MAX_MISTAKES) {
+        setIsGameOverByMistakes(true);
+      }
+    } else {
+      // If selection is correct and a category name is provided,
+      // it means a group was successfully identified.
+      if (result.category) { // Changed from result.category_name
+        setSolvedCategoryNames(prevNames => {
+          const newNames = new Set(prevNames);
+          newNames.add(result.category); // Changed from result.category_name
+          return newNames;
+        });
+      }
+    }
+    // Refresh game state to see updated scores, words, and overall game status
     fetchGameState();
     // Clear result after 3 seconds
     setTimeout(() => setLastResult(null), 3000);
@@ -56,6 +78,13 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
     return () => clearInterval(interval);
   }, [gameId]);
 
+  useEffect(() => {
+    // Reset state when gameId changes (new game starts)
+    setMistakes(0);
+    setIsGameOverByMistakes(false);
+    setSolvedCategoryNames(new Set()); // Reset solved categories
+  }, [gameId]);
+
   if (loading) {
     return <div className="text-center">Loading game...</div>;
   }
@@ -64,17 +93,18 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
     return <div className="text-center text-red-600">Failed to load game</div>;
   }
 
-  const playerEntry = gameData.players.find((p: Player) => p.id === currentPlayer.player_id);
+  const playerEntry = gameData.players.find((p: any) => p.id === currentPlayer.player_id);
   const backendScore = playerEntry ? playerEntry.score : currentPlayer.score;
   const displayScore = lastResult?.new_score ?? backendScore;
+  const solvedGroupsCount = solvedCategoryNames.size; // Use the size of the set
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-6">
           <h2 className="text-3xl font-bold mb-2 bg-yellow-200 inline-block px-2">SpeedConnect Game</h2>
-          <p className={`text-gray-600 ${gameData.status === 'completed' ? 'font-bold' : ''}`}>
-            Status: {gameData.status === 'completed' ? 'Game Over' : 'Active'}
+          <p className={`text-gray-600 ${gameData.status === 'completed' || isGameOverByMistakes ? 'font-bold' : ''}`}>
+            Status: {isGameOverByMistakes ? 'Game Over (Max Mistakes)' : gameData.status === 'completed' ? 'Game Over' : 'Active'}
           </p>
           <p className="text-sm text-gray-500">Game ID: {gameId}</p>
         </div>
@@ -135,11 +165,31 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
               <h3 className="text-lg font-semibold mb-2">You</h3>
               <p>Name: {currentPlayer.name}</p>
               <p>Score: {displayScore}</p>
-
+              <p>Mistakes: {mistakes} / {MAX_MISTAKES}</p>
+              <p>Solved Groups: {solvedGroupsCount} / {TOTAL_GROUPS}</p>
             </div>
 
-            {/* Word Selection Game */}
-            {gameData.status === 'active' ? (
+            {/* Game Over by Mistakes View */}
+            {isGameOverByMistakes ? (
+              <div className="bg-white rounded-lg p-4 mb-6 shadow">
+                <div className="text-center py-6">
+                  <h3 className="text-xl font-bold mb-2 text-red-600">Game Over</h3>
+                  <p className="mb-4">You've made {MAX_MISTAKES} mistakes.</p>
+                </div>
+                {gameData?.categories && (
+                  <div className="space-y-2 mt-6">
+                    <h3 className="text-lg font-semibold mb-4">Categories (Solutions)</h3>
+                    {gameData.categories.map((category: any, index: number) => (
+                      <div key={index} className="p-3 bg-yellow-50 rounded mb-2">
+                        <h4 className="font-medium">{category.name}</h4>
+                        <p className="text-sm text-gray-600">{category.words.join(', ')}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : gameData.status === 'active' ? (
+              // Active Game View
               <>
                 <div className="bg-white rounded-lg p-4 mb-6 shadow">
                   <WordSelection
@@ -149,18 +199,15 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
                     onSelectionResult={handleSelectionResult}
                   />
                 </div>
-                
-                {/* Add Game Completion button only if game is active */}
                 <GameCompletion gameId={gameId} onGameCompleted={handleGameCompleted} />
               </>
-            ) : (
+            ) : gameData.status === 'completed' ? (
+              // Game Over by Normal Completion View
               <div className="bg-white rounded-lg p-4 mb-6 shadow">
                 <div className="text-center py-6">
                   <h3 className="text-xl font-bold mb-2 text-red-600">Game Over</h3>
                   <p className="mb-4">This game has ended. Check out the solutions below!</p>
                 </div>
-
-                {/* Categories/Solutions */}
                 <div className="space-y-2 mt-6">
                   <h3 className="text-lg font-semibold mb-4">Categories (Solutions)</h3>
                   {gameData.categories.map((category: any, index: number) => (
@@ -171,7 +218,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
                   ))}
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* Right Column - Scoreboard */}
@@ -181,7 +228,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
         </div>
 
         <div className="text-center mt-6">
-          <button 
+          <button
             onClick={onBackToMenu}
             className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
           >
