@@ -84,6 +84,26 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
       setIsEliminated(true);
     }
     
+    // If the game ended due to elimination, show game over immediately
+    if (result.game_ended) {
+      // Fetch final results
+      setTimeout(() => {
+        fetch(`http://localhost:8000/games/${gameId}/complete`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+        .then(response => response.json())
+        .then(data => {
+          setGameResult(data);
+        })
+        .catch(error => {
+          console.error('Error fetching final results:', error);
+        });
+      }, 2000); // Show elimination message for 2 seconds first
+    }
+    
     if (result.correct && result.category) {
       setSolvedCategoryNames(prevNames => {
         const newNames = new Set(prevNames);
@@ -145,7 +165,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
           <h2 className="text-3xl font-bold mb-2 bg-yellow-200 inline-block px-2">SpeedConnect Game</h2>
           <p className="text-lg font-semibold">Round {currentRound}</p>
           <p className={`text-gray-600 ${gameData.status === 'completed' || isEliminated ? 'font-bold' : ''}`}>
-            Status: {isEliminated ? 'Eliminated from Round' : gameData.status === 'completed' ? 'Game Over' : 'Active'}
+            Status: {gameData.status === 'completed' ? 'Game Over' : isEliminated ? 'Eliminated - Game Over' : 'Active'}
           </p>
           <p className="text-sm text-gray-500">Game ID: {gameId}</p>
         </div>
@@ -154,12 +174,12 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
         {gameResult && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
-              <h3 className="text-xl font-bold mb-4 text-center">Game Complete!</h3>
+              <h3 className="text-xl font-bold mb-4 text-center text-red-600">Game Over!</h3>
               
               {gameResult.winner && (
                 <div className="text-center mb-4">
-                  <p className="font-semibold">Winner: {gameResult.winner.name}</p>
-                  <p>Score: {gameResult.winner.score}</p>
+                  <p className="font-semibold">Final Score: {gameResult.winner.name}</p>
+                  <p>Points: {gameResult.winner.score}</p>
                 </div>
               )}
               
@@ -189,11 +209,15 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
         {lastResult && (
           <div className={`text-center mb-6 p-4 rounded-lg ${
             lastResult.correct ? 'bg-green-100 text-green-800' : 
+            lastResult.game_ended ? 'bg-red-200 text-red-900 font-bold' :
             lastResult.eliminated ? 'bg-red-200 text-red-900' : 'bg-red-100 text-red-800'
           }`}>
             <p className="font-semibold">{lastResult.message}</p>
             {lastResult.points_earned > 0 && (
               <p>+{lastResult.points_earned} points! New score: {lastResult.new_score}</p>
+            )}
+            {lastResult.game_ended && (
+              <p className="mt-2">The game has ended. Final results coming up...</p>
             )}
           </div>
         )}
@@ -211,16 +235,12 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
               <p>Solved Groups: {solvedGroupsCount} / {TOTAL_GROUPS}</p>
             </div>
 
-            {/* Round Complete View */}
-            {isRoundComplete && gameData.status === 'active' ? (
+            {/* Round Complete View - Only show if game is still active */}
+            {isRoundComplete && gameData.status === 'active' && !isEliminated ? (
               <div className="bg-white rounded-lg p-4 mb-6 shadow">
                 <div className="text-center py-6">
                   <h3 className="text-xl font-bold mb-2">Round {currentRound} Complete!</h3>
-                  {isEliminated ? (
-                    <p className="mb-4 text-red-600">You were eliminated this round.</p>
-                  ) : (
-                    <p className="mb-4 text-green-600">You solved all groups!</p>
-                  )}
+                  <p className="mb-4 text-green-600">You solved all groups!</p>
                   <button
                     onClick={startNextRound}
                     className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4"
@@ -254,30 +274,26 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
                 </div>
                 <GameCompletion gameId={gameId} onGameCompleted={handleGameCompleted} />
               </>
-            ) : gameData.status === 'completed' ? (
+            ) : gameData.status === 'completed' || isEliminated ? (
               // Game Over View
               <div className="bg-white rounded-lg p-4 mb-6 shadow">
                 <div className="text-center py-6">
                   <h3 className="text-xl font-bold mb-2 text-red-600">Game Over</h3>
-                  <p className="mb-4">This game has ended. Check out the solutions below!</p>
+                  <p className="mb-4">
+                    {isEliminated 
+                      ? "You made 3 mistakes and were eliminated. The game has ended." 
+                      : "This game has ended. Check out the solutions below!"
+                    }
+                  </p>
                 </div>
                 <div className="space-y-2 mt-6">
-                  <h3 className="text-lg font-semibold mb-4">Final Round Solutions</h3>
+                  <h3 className="text-lg font-semibold mb-4">Round {currentRound} Solutions</h3>
                   {gameData.categories.map((category: any, index: number) => (
                     <div key={index} className="p-3 bg-yellow-50 rounded mb-2">
                       <h4 className="font-medium">{category.name}</h4>
                       <p className="text-sm text-gray-600">{category.words.join(', ')}</p>
                     </div>
                   ))}
-                </div>
-              </div>
-            ) : isEliminated ? (
-              // Eliminated View
-              <div className="bg-white rounded-lg p-4 mb-6 shadow">
-                <div className="text-center py-6">
-                  <h3 className="text-xl font-bold mb-2 text-red-600">Eliminated</h3>
-                  <p className="mb-4">You made {MAX_MISTAKES} mistakes this round.</p>
-                  <p className="mb-4">Wait for other players to finish or the next round to start.</p>
                 </div>
               </div>
             ) : null}

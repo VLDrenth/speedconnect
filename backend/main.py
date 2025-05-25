@@ -201,7 +201,8 @@ async def player_select_words(game_id: str, player_id: str, selection: WordSelec
                 "points_earned": 0,
                 "new_score": player['score'],
                 "round_mistakes": player.get('round_mistakes', 0),
-                "eliminated": False
+                "eliminated": False,
+                "game_ended": False
             }
         
         points_earned = 0
@@ -210,6 +211,7 @@ async def player_select_words(game_id: str, player_id: str, selection: WordSelec
         category_name = None
         round_mistakes = player.get('round_mistakes', 0)
         eliminated = False
+        game_ended = False
         
         # Check if words form a valid category
         for category in categories:
@@ -232,7 +234,14 @@ async def player_select_words(game_id: str, player_id: str, selection: WordSelec
             # Check if player is eliminated (3 mistakes in current round)
             if round_mistakes >= 3:
                 eliminated = True
-                message += " - You've been eliminated from this round!"
+                game_ended = True
+                message += " - Game Over! You've been eliminated!"
+                
+                # End the entire game
+                supabase.table('games').update({
+                    'status': 'completed',
+                    'end_time': 'NOW()'
+                }).eq('id', game_id).execute()
         
         # Update player score and round mistakes
         new_score = player['score'] + points_earned
@@ -248,7 +257,8 @@ async def player_select_words(game_id: str, player_id: str, selection: WordSelec
             "points_earned": points_earned,
             "new_score": new_score,
             "round_mistakes": round_mistakes,
-            "eliminated": eliminated
+            "eliminated": eliminated,
+            "game_ended": game_ended
         }
         
     except Exception as e:
