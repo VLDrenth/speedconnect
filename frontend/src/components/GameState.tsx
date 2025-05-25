@@ -8,6 +8,7 @@ interface Player {
   name: string;
   score: number;
   joined_at: string;
+  round_mistakes?: number;
 }
 
 interface GameStateProps {
@@ -21,12 +22,11 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
   const [loading, setLoading] = useState(true);
   const [lastResult, setLastResult] = useState<any>(null);
   const [gameResult, setGameResult] = useState<any>(null);
-  const [mistakes, setMistakes] = useState(0);
-  const [isGameOverByMistakes, setIsGameOverByMistakes] = useState(false);
-  const [solvedCategoryNames, setSolvedCategoryNames] = useState<Set<string>>(new Set()); // Track solved category names
-  const [solvedWords, setSolvedWords] = useState<string[]>([]); // Track solved words
+  const [isEliminated, setIsEliminated] = useState(false);
+  const [solvedCategoryNames, setSolvedCategoryNames] = useState<Set<string>>(new Set());
+  const [solvedWords, setSolvedWords] = useState<string[]>([]);
   const MAX_MISTAKES = 3;
-  const TOTAL_GROUPS = 4; // Assuming 4 groups to solve
+  const TOTAL_GROUPS = 4;
 
   const fetchGameState = async () => {
     try {
@@ -42,58 +42,82 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
     }
   };
 
+  const startNextRound = async () => {
+    // Sample game data for next round
+    const gameData = {
+      words: ["table", "chair", "desk", "sofa", "run", "walk", "jog", "sprint", "happy", "sad", "angry", "excited", "book", "pen", "paper", "eraser"],
+      categories: [
+        { name: "Furniture", words: ["table", "chair", "desk", "sofa"] },
+        { name: "Movement", words: ["run", "walk", "jog", "sprint"] },
+        { name: "Emotions", words: ["happy", "sad", "angry", "excited"] },
+        { name: "Office", words: ["book", "pen", "paper", "eraser"] }
+      ]
+    };
+
+    try {
+      const response = await fetch(`http://localhost:8000/games/${gameId}/next-round`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(gameData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        // Reset round-specific state
+        setIsEliminated(false);
+        setSolvedCategoryNames(new Set());
+        setSolvedWords([]);
+        setLastResult(null);
+        fetchGameState();
+      }
+    } catch (error) {
+      console.error('Error starting next round:', error);
+    }
+  };
+
   const handleSelectionResult = (result: any) => {
     setLastResult(result);
-    if (!result.correct) {
-      const newMistakes = mistakes + 1;
-      setMistakes(newMistakes);
-      if (newMistakes >= MAX_MISTAKES) {
-        setIsGameOverByMistakes(true);
-      }
-    } else {
-      // If selection is correct and a category name is provided,
-      // it means a group was successfully identified.
-      if (result.category) {
-        // Update solved category names
-        setSolvedCategoryNames(prevNames => {
-          const newNames = new Set(prevNames);
-          newNames.add(result.category);
-          return newNames;
-        });
-        
-        // Find the category in gameData and add its words to solvedWords
-        if (gameData && gameData.categories) {
-          const category = gameData.categories.find((cat: any) => cat.name === result.category);
-          if (category) {
-            setSolvedWords(prev => [...prev, ...category.words]);
-          }
+    
+    if (result.eliminated) {
+      setIsEliminated(true);
+    }
+    
+    if (result.correct && result.category) {
+      setSolvedCategoryNames(prevNames => {
+        const newNames = new Set(prevNames);
+        newNames.add(result.category);
+        return newNames;
+      });
+      
+      if (gameData && gameData.categories) {
+        const category = gameData.categories.find((cat: any) => cat.name === result.category);
+        if (category) {
+          setSolvedWords(prev => [...prev, ...category.words]);
         }
       }
     }
-    // Refresh game state to see updated scores, words, and overall game status
+    
     fetchGameState();
-    // Clear result after 3 seconds
     setTimeout(() => setLastResult(null), 3000);
   };
 
   const handleGameCompleted = (result: any) => {
     setGameResult(result);
-    fetchGameState(); // Update game state to reflect completed status
+    fetchGameState();
   };
 
   useEffect(() => {
     fetchGameState();
-    // Refresh game state every 5 seconds
     const interval = setInterval(fetchGameState, 5000);
     return () => clearInterval(interval);
   }, [gameId]);
 
   useEffect(() => {
-    // Reset state when gameId changes (new game starts)
-    setMistakes(0);
-    setIsGameOverByMistakes(false);
-    setSolvedCategoryNames(new Set()); // Reset solved categories
-    setSolvedWords([]); // Reset solved words
+    setIsEliminated(false);
+    setSolvedCategoryNames(new Set());
+    setSolvedWords([]);
   }, [gameId]);
 
   if (loading) {
@@ -107,15 +131,21 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
   const playerEntry = gameData.players.find((p: any) => p.id === currentPlayer.player_id);
   const backendScore = playerEntry ? playerEntry.score : currentPlayer.score;
   const displayScore = lastResult?.new_score ?? backendScore;
-  const solvedGroupsCount = solvedCategoryNames.size; // Use the size of the set
+  const roundMistakes = playerEntry?.round_mistakes || 0;
+  const solvedGroupsCount = solvedCategoryNames.size;
+  const currentRound = gameData.current_round || 1;
+
+  // Check if round is complete (all groups solved or player eliminated)
+  const isRoundComplete = solvedGroupsCount >= TOTAL_GROUPS || isEliminated;
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-6">
           <h2 className="text-3xl font-bold mb-2 bg-yellow-200 inline-block px-2">SpeedConnect Game</h2>
-          <p className={`text-gray-600 ${gameData.status === 'completed' || isGameOverByMistakes ? 'font-bold' : ''}`}>
-            Status: {isGameOverByMistakes ? 'Game Over (Max Mistakes)' : gameData.status === 'completed' ? 'Game Over' : 'Active'}
+          <p className="text-lg font-semibold">Round {currentRound}</p>
+          <p className={`text-gray-600 ${gameData.status === 'completed' || isEliminated ? 'font-bold' : ''}`}>
+            Status: {isEliminated ? 'Eliminated from Round' : gameData.status === 'completed' ? 'Game Over' : 'Active'}
           </p>
           <p className="text-sm text-gray-500">Game ID: {gameId}</p>
         </div>
@@ -158,7 +188,8 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
         {/* Selection Result Feedback */}
         {lastResult && (
           <div className={`text-center mb-6 p-4 rounded-lg ${
-            lastResult.correct ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            lastResult.correct ? 'bg-green-100 text-green-800' : 
+            lastResult.eliminated ? 'bg-red-200 text-red-900' : 'bg-red-100 text-red-800'
           }`}>
             <p className="font-semibold">{lastResult.message}</p>
             {lastResult.points_earned > 0 && (
@@ -176,20 +207,30 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
               <h3 className="text-lg font-semibold mb-2">You</h3>
               <p>Name: {currentPlayer.name}</p>
               <p>Score: {displayScore}</p>
-              <p>Mistakes: {mistakes} / {MAX_MISTAKES}</p>
+              <p>Round {currentRound} Mistakes: {roundMistakes} / {MAX_MISTAKES}</p>
               <p>Solved Groups: {solvedGroupsCount} / {TOTAL_GROUPS}</p>
             </div>
 
-            {/* Game Over by Mistakes View */}
-            {isGameOverByMistakes ? (
+            {/* Round Complete View */}
+            {isRoundComplete && gameData.status === 'active' ? (
               <div className="bg-white rounded-lg p-4 mb-6 shadow">
                 <div className="text-center py-6">
-                  <h3 className="text-xl font-bold mb-2 text-red-600">Game Over</h3>
-                  <p className="mb-4">You've made {MAX_MISTAKES} mistakes.</p>
+                  <h3 className="text-xl font-bold mb-2">Round {currentRound} Complete!</h3>
+                  {isEliminated ? (
+                    <p className="mb-4 text-red-600">You were eliminated this round.</p>
+                  ) : (
+                    <p className="mb-4 text-green-600">You solved all groups!</p>
+                  )}
+                  <button
+                    onClick={startNextRound}
+                    className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4"
+                  >
+                    Start Round {currentRound + 1}
+                  </button>
                 </div>
                 {gameData?.categories && (
                   <div className="space-y-2 mt-6">
-                    <h3 className="text-lg font-semibold mb-4">Categories (Solutions)</h3>
+                    <h3 className="text-lg font-semibold mb-4">Round {currentRound} Solutions</h3>
                     {gameData.categories.map((category: any, index: number) => (
                       <div key={index} className="p-3 bg-yellow-50 rounded mb-2">
                         <h4 className="font-medium">{category.name}</h4>
@@ -199,7 +240,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
                   </div>
                 )}
               </div>
-            ) : gameData.status === 'active' ? (
+            ) : gameData.status === 'active' && !isEliminated ? (
               // Active Game View
               <>
                 <div className="bg-white rounded-lg p-4 mb-6 shadow">
@@ -208,26 +249,35 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
                     gameId={gameId}
                     playerId={currentPlayer.player_id}
                     onSelectionResult={handleSelectionResult}
-                    solvedWords={solvedWords} // Pass solved words to the component
+                    solvedWords={solvedWords}
                   />
                 </div>
                 <GameCompletion gameId={gameId} onGameCompleted={handleGameCompleted} />
               </>
             ) : gameData.status === 'completed' ? (
-              // Game Over by Normal Completion View
+              // Game Over View
               <div className="bg-white rounded-lg p-4 mb-6 shadow">
                 <div className="text-center py-6">
                   <h3 className="text-xl font-bold mb-2 text-red-600">Game Over</h3>
                   <p className="mb-4">This game has ended. Check out the solutions below!</p>
                 </div>
                 <div className="space-y-2 mt-6">
-                  <h3 className="text-lg font-semibold mb-4">Categories (Solutions)</h3>
+                  <h3 className="text-lg font-semibold mb-4">Final Round Solutions</h3>
                   {gameData.categories.map((category: any, index: number) => (
                     <div key={index} className="p-3 bg-yellow-50 rounded mb-2">
                       <h4 className="font-medium">{category.name}</h4>
                       <p className="text-sm text-gray-600">{category.words.join(', ')}</p>
                     </div>
                   ))}
+                </div>
+              </div>
+            ) : isEliminated ? (
+              // Eliminated View
+              <div className="bg-white rounded-lg p-4 mb-6 shadow">
+                <div className="text-center py-6">
+                  <h3 className="text-xl font-bold mb-2 text-red-600">Eliminated</h3>
+                  <p className="mb-4">You made {MAX_MISTAKES} mistakes this round.</p>
+                  <p className="mb-4">Wait for other players to finish or the next round to start.</p>
                 </div>
               </div>
             ) : null}
