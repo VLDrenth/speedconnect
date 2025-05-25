@@ -1,8 +1,7 @@
-// filepath: c:\Users\vince\Projects\speedconnect\frontend\postcss.config.js
 module.exports = {
   plugins: {
-    tailwindcss: {},
+    tailwindcss: {}, // Re-enable Tailwind CSS
     autoprefixer: {},
   },
-}
+};
 

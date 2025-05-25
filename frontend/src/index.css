@@ -3,10 +3,13 @@
 @tailwind utilities;
 
 body {
+  /* Using direct properties for robustness */
+  background-color: #0f172a; /* Equivalent to slate-900 */
+  color: #f1f5f9; /* Equivalent to slate-100 */
+  /* Using Tailwind's default sans-serif font stack directly */
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
