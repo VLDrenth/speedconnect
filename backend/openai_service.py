@@ -92,6 +92,7 @@ Requirements:
 - Never use the same word in multiple groups
 - Seed for variation: {seed}
 - Be creative and have fun with the categories!
+- MAKE THE CATEGORIES VERY EASY AND OBVIOUS AND TRIVIAL (TESTING)
 
 {prev_categories_text}Use highly varied and creative categories that have not been used before.
 

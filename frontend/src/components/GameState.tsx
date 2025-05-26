@@ -29,6 +29,9 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
   const [isTimeExpired, setIsTimeExpired] = useState(false);
   const [gameState, setGameState] = useState<'waiting' | 'active' | 'game_over' | 'time_up'>('waiting');
   const [showFinalResults, setShowFinalResults] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [playerScore, setPlayerScore] = useState(0);
+  const [loadingFinalResults, setLoadingFinalResults] = useState(false);
   const MAX_MISTAKES = 3;
   const TOTAL_GROUPS = 4;
 
@@ -184,21 +187,39 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
   };
 
   const handleContinueToResults = () => {
-    setShowFinalResults(true);
-    
-    // Fetch final results when continue is clicked
-    fetch(`http://localhost:8000/games/${gameId}/complete`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
-    .then(response => response.json())
-    .then(data => {
-      setGameResult(data);
+    setShowFinalResults(true); // Prepare to show the final results area
+    setLoadingFinalResults(true); // Start loading indicator
+
+    Promise.all([
+      fetch(`http://localhost:8000/games/${gameId}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }).then(response => response.json()),
+      
+      fetch(`http://localhost:8000/games/${gameId}/leaderboard`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      }).then(response => response.json())
+    ])
+    .then(([gameResultData, leaderboardData]) => {
+      console.log('Game result data:', gameResultData);
+      console.log('Leaderboard data:', leaderboardData);
+      
+      setGameResult(gameResultData);
+      setLeaderboard(leaderboardData?.players || []); // Ensure leaderboardData itself is checked
+      
+      const currentPlayerData = leaderboardData?.players?.find((p: any) => p.id === currentPlayer.player_id);
+      const actualScore = currentPlayerData?.score || 0;
+      setPlayerScore(actualScore);
     })
     .catch(error => {
       console.error('Error fetching final results:', error);
+      setGameResult({ game_id: gameId, status: 'completed', final_leaderboard: [], winner: null }); // More complete fallback
+      setLeaderboard([]);
+      setPlayerScore(0);
+    })
+    .finally(() => {
+      setLoadingFinalResults(false); // Stop loading indicator
     });
   };
 
@@ -273,198 +294,192 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
   return (
     <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-6">
-          <h2 className="text-3xl font-bold mb-2 bg-yellow-200 inline-block px-2">SpeedConnect Game</h2>
-          <p className="text-lg font-semibold">Round {currentRound}</p>
-          
-          {/* Timer Display */}
-          <div className={`text-2xl font-bold mb-2 ${
-            timeRemaining <= 60 ? 'text-red-600 animate-pulse' : 
-            timeRemaining <= 120 ? 'text-orange-600' : 'text-green-600'
-          }`}>
-            Time: {formatTime(timeRemaining)}
-          </div>
-          
-          <p className={`text-gray-600 ${isGameOver ? 'font-bold' : ''}`}>
-            Status: {
-              isTimeExpired ? 'Time Up - Game Over' :
-              gameData.status === 'completed' ? 'Game Over' : 
-              isEliminated ? 'Eliminated - Game Over' : 'Active'
-            }
-          </p>
-          <p className="text-sm text-gray-500">Game ID: {gameId}</p>
-        </div>
-
-        {/* Game Results Modal */}
-        {gameResult && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
-              <h3 className="text-xl font-bold mb-4 text-center text-red-600">
-                {isTimeExpired ? 'Time\'s Up!' : 'Game Over!'}
-              </h3>
-              
-              {gameResult.winner && (
-                <div className="text-center mb-4">
-                  <p className="font-semibold">Final Score: {gameResult.winner.name}</p>
-                  <p>Points: {gameResult.winner.score}</p>
+        
+        {/* Only show game interface if NOT showing final results */}
+        {!showFinalResults ? (
+          <>
+            {/* Game Header */}
+            <div className="bg-white rounded-lg p-6 shadow mb-4">
+              <div className="flex justify-between items-center mb-4">
+                <h1 className="text-3xl font-bold text-blue-600">SpeedConnect Game</h1>
+                <div className="text-right">
+                  <p className="text-lg font-semibold">Round {currentRound}</p>
                 </div>
-              )}
+              </div>
               
-              <h4 className="font-semibold mt-4 mb-2">Final Leaderboard</h4>
-              <div className="space-y-2 mb-6">
-                {gameResult.final_leaderboard.map((player: any, index: number) => (
-                  <div key={player.id} className="flex justify-between p-2 bg-gray-50 rounded">
-                    <span>#{index + 1} {player.name}</span>
-                    <span>{player.score} points</span>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-6">
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600">Time</p>
+                    <p className="text-xl font-bold text-red-600">{formatTime(timeRemaining)}</p>
                   </div>
-                ))}
-              </div>
-              
-              <div className="text-center">
-                <button
-                  onClick={() => setGameResult(null)}
-                  className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Selection Result Feedback */}
-        {lastResult && (
-          <div className={`text-center mb-6 p-4 rounded-lg ${
-            lastResult.correct ? 'bg-green-100 text-green-800' : 
-            lastResult.game_ended || lastResult.time_expired ? 'bg-red-200 text-red-900 font-bold' :
-            lastResult.eliminated ? 'bg-red-200 text-red-900' : 'bg-red-100 text-red-800'
-          }`}>
-            <p className="font-semibold">{lastResult.message}</p>
-            {lastResult.points_earned > 0 && (
-              <p>+{lastResult.points_earned} points! New score: {lastResult.new_score}</p>
-            )}
-            {(lastResult.game_ended || lastResult.time_expired) && (
-              <p className="mt-2">The game has ended. Final results coming up...</p>
-            )}
-          </div>
-        )}
-
-        {/* Two-part Layout: Compact Info + Large Word Grid */}
-        <div className="h-screen flex flex-col p-4">
-          {/* Top Info Section - Compact (~10-15% of screen) */}
-          <div className="bg-blue-100 rounded-lg p-3 mb-4 flex-shrink-0">
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="text-base font-semibold">{currentPlayer.name}</h3>
-                <p className="text-sm">Score: {displayScore}</p>
-              </div>
-              <div className="text-right">
-                <div className="text-xl font-bold">
-                  {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
-                </div>
-                <p className="text-sm">Round {currentRound}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Main Word Grid Section - Takes up remaining space (~80-85%) */}
-          <div className="flex-1 flex flex-col">
-            {isRoundComplete && gameData.status === 'active' && !isEliminated && !isTimeExpired && timeRemaining > 0 ? (
-              <div className="bg-white rounded-lg p-6 shadow text-center flex-1 flex flex-col justify-center">
-                <h3 className="text-xl font-bold mb-4">Round {currentRound} Complete!</h3>
-                <p className="mb-4 text-green-600">You solved all groups!</p>
-                <button
-                  onClick={startNextRound}
-                  className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-                >
-                  Start Round {currentRound + 1}
-                </button>
-              </div>
-            ) : gameData.status === 'active' && !isEliminated && !isTimeExpired && timeRemaining > 0 ? (
-              // Active Game - 4x4 Word Grid taking full available space
-              <div className="bg-white rounded-lg p-6 shadow flex-1">
-                <WordSelection
-                  words={gameData.words}
-                  gameId={gameId}
-                  playerId={currentPlayer.player_id}
-                  onSelectionResult={handleSelectionResult}
-                  solvedWords={solvedWords}
-                  gameOver={false}
-                  allGroups={[]}
-                />
-              </div>
-            ) : (isEliminated || isTimeExpired || gameData.status === 'completed') && !showFinalResults ? (
-              // Game Over View - Show the visual category grid with continue button
-              <div className="bg-white rounded-lg p-6 shadow flex-1 flex flex-col">
-                <div className="text-center mb-4">
-                  <h3 className="text-xl font-bold mb-2 text-red-600">
-                    {isTimeExpired ? "Time's Up!" : isEliminated ? "Game Over - 3 Mistakes" : "Game Complete"}
-                  </h3>
-                  <p className="mb-4">
-                    {isTimeExpired 
-                      ? "The 5-minute timer has expired." 
-                      : isEliminated 
-                      ? "You made 3 mistakes and were eliminated." 
-                      : "The game has ended."
-                    }
-                  </p>
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600">Status</p>
+                    <p className="text-lg font-semibold capitalize">
+                      {isEliminated ? 'Game Over' : isTimeExpired ? 'Time Up' : gameData.status}
+                    </p>
+                  </div>
                 </div>
                 
-                {/* Show the visual category grid */}
-                <div className="flex-1">
+                <div className="text-right">
+                  <p className="text-sm text-gray-600">Game ID</p>
+                  <p className="text-xs text-gray-500">{gameId}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Game Content */}
+            <div className="flex-1 flex flex-col">
+              {isRoundComplete && gameData.status === 'active' && !isEliminated && !isTimeExpired && timeRemaining > 0 ? (
+                <div className="bg-white rounded-lg p-6 shadow text-center flex-1 flex flex-col justify-center">
+                  <h3 className="text-xl font-bold mb-4">Round {currentRound} Complete!</h3>
+                  <p className="mb-4 text-green-600">You solved all groups!</p>
+                  <button
+                    onClick={startNextRound}
+                    className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                  >
+                    Start Round {currentRound + 1}
+                  </button>
+                </div>
+              ) : gameData.status === 'active' && !isEliminated && !isTimeExpired && timeRemaining > 0 ? (
+                // Active Game - 4x4 Word Grid taking full available space
+                <div className="bg-white rounded-lg p-6 shadow flex-1">
                   <WordSelection
                     words={gameData.words}
                     gameId={gameId}
                     playerId={currentPlayer.player_id}
                     onSelectionResult={handleSelectionResult}
                     solvedWords={solvedWords}
-                    gameOver={true}
-                    allGroups={extractAllGroups(gameData)}
+                    gameOver={false}
+                    allGroups={[]}
                   />
                 </div>
+              ) : (isEliminated || isTimeExpired || gameData.status === 'completed') ? (
+                // Game Over View - Show the visual category grid with continue button
+                <div className="bg-white rounded-lg p-6 shadow flex-1 flex flex-col">
+                  <div className="text-center mb-4">
+                    <h3 className="text-xl font-bold mb-2 text-red-600">
+                      {isTimeExpired ? "Time's Up!" : isEliminated ? "Game Over - 3 Mistakes" : "Game Complete"}
+                    </h3>
+                    <p className="mb-4">
+                      {isTimeExpired 
+                        ? "The 5-minute timer has expired." 
+                        : isEliminated 
+                        ? "You made 3 mistakes and were eliminated." 
+                        : "The game has ended."
+                      }
+                    </p>
+                  </div>
+                  
+                  {/* Show the visual category grid */}
+                  <div className="flex-1">
+                    <WordSelection
+                      words={gameData.words}
+                      gameId={gameId}
+                      playerId={currentPlayer.player_id}
+                      onSelectionResult={handleSelectionResult}
+                      solvedWords={solvedWords}
+                      gameOver={true}
+                      allGroups={extractAllGroups(gameData)}
+                    />
+                  </div>
+                  
+                  {/* Continue button */}
+                  <div className="text-center mt-6 pt-4 border-t">
+                    <button
+                      onClick={handleContinueToResults}
+                      className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-lg text-lg transition-colors"
+                    >
+                      Continue
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          /* Final Results Screen - ONLY this when showFinalResults is true */
+          loadingFinalResults ? (
+            <div className="bg-white rounded-lg p-8 shadow flex-1 flex flex-col justify-center items-center min-h-[600px]">
+              <h3 className="text-2xl font-bold mb-4 text-blue-600">Loading Results...</h3>
+              <p className="text-gray-600">Please wait a moment.</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg p-6 shadow flex-1 flex flex-col max-w-4xl mx-auto min-h-[600px]">
+              
+              {/* Single Header */}
+              <div className="text-center mb-6">
+                <h2 className="text-2xl font-bold text-blue-600 mb-2">Game Complete!</h2>
+              </div>
+
+              {/* Your Score - Compact */}
+              <div className="bg-blue-50 rounded-lg p-4 mb-6 text-center">
+                <div className="flex justify-between items-center">
+                  <span className="text-lg font-semibold">{currentPlayer?.name || 'You'}</span>
+                  <span className="text-2xl font-bold text-blue-600">{playerScore} points</span>
+                </div>
+                <p className="text-sm text-gray-600 mt-1">
+                  {solvedCategoryNames.size} / {gameData?.categories?.length || 4} categories solved
+                </p>
+              </div>
+
+              {/* Leaderboard - Clean */}
+              <div className="flex-1">
+                <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-t-lg p-3">
+                  <h3 className="text-lg font-bold text-center">LIVE LEADERBOARD</h3>
+                </div>
                 
-                {/* Continue button */}
-                <div className="text-center mt-6 pt-4 border-t">
-                  <button
-                    onClick={handleContinueToResults}
-                    className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-lg text-lg transition-colors"
-                  >
-                    Continue
-                  </button>
+                <div className="bg-gray-50 rounded-b-lg border-2 border-t-0 border-gray-200">
+                  {leaderboard && leaderboard.length > 0 ? (
+                    <div className="divide-y divide-gray-200">
+                      {leaderboard
+                        .sort((a, b) => (b.score || 0) - (a.score || 0))
+                        .map((player, index) => (
+                          <div 
+                            key={player.id || index}
+                            className={`flex justify-between items-center p-3 ${
+                              player.id === currentPlayer?.id 
+                                ? 'bg-blue-100' 
+                                : 'bg-white'
+                            }`}
+                          >
+                            <div className="flex items-center">
+                              <span className="text-sm font-bold text-gray-500 mr-3 w-6">
+                                #{index + 1}
+                              </span>
+                              <span className="font-medium">
+                                {player.name || 'Unknown Player'}
+                                {player.id === currentPlayer?.id && (
+                                  <span className="text-blue-600 text-sm ml-1">(You)</span>
+                                )}
+                              </span>
+                            </div>
+                            <span className="font-bold text-blue-600">
+                              {player.score || 0} points
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6">
+                      <p className="text-gray-500">No leaderboard data available</p>
+                    </div>
+                  )}
                 </div>
               </div>
-            ) : showFinalResults && gameResult ? (
-              // Final Results Screen (shown after continue is clicked)
-              <div className="bg-white rounded-lg p-6 shadow text-center flex-1 flex flex-col justify-center">
-                <h3 className="text-2xl font-bold mb-6 text-green-600">Final Results</h3>
-                
-                {/* Show final results content here */}
-                <div className="mb-6">
-                  <p className="text-lg mb-2">Game Complete!</p>
-                  <p className="text-gray-600">
-                    Categories solved: {solvedCategoryNames.size} / {gameData?.categories?.length || 4}
-                  </p>
-                </div>
-                
+
+              {/* Single Navigation Button */}
+              <div className="text-center mt-6">
                 <button
-                  onClick={navigateToHome}
-                  className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg"
+                  onClick={() => window.location.href = '/'}
+                  className="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-6 rounded-lg transition-colors"
                 >
                   Back to Home
                 </button>
               </div>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="text-center mt-6">
-          <button
-            onClick={onBackToMenu}
-            className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
-          >
-            Back to Menu
-          </button>
-        </div>
+            </div>
+          )
+        )}
       </div>
     </div>
   );
