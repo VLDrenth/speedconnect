@@ -17,9 +17,26 @@ const WordSelection: React.FC<WordSelectionProps> = ({
 }) => {
   const [selectedWords, setSelectedWords] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [solvedGroups, setSolvedGroups] = useState<string[][]>([]);
+
+  // Define colors for each solved group
+  const groupColors = ['#22c55e', '#f59e0b', '#ef4444', '#8b5cf6']; // green, amber, red, purple
+
+  // Organize words: solved groups first, then remaining unsolved words
+  const organizedWords = React.useMemo(() => {
+    const flatSolvedWords = solvedGroups.flat();
+    const unsolvedWords = words.filter(word => !flatSolvedWords.includes(word));
+    
+    // Fill remaining slots to make 16 total
+    const organized = [...flatSolvedWords, ...unsolvedWords];
+    while (organized.length < 16) {
+      organized.push(''); // Empty slots if needed
+    }
+    return organized.slice(0, 16);
+  }, [words, solvedGroups]);
 
   const toggleWord = (word: string) => {
-    if (solvedWords.includes(word)) return;
+    if (!word || solvedWords.includes(word)) return;
     
     if (selectedWords.includes(word)) {
       setSelectedWords(selectedWords.filter(w => w !== word));
@@ -43,6 +60,12 @@ const WordSelection: React.FC<WordSelectionProps> = ({
 
       if (response.ok) {
         const result = await response.json();
+        
+        // If correct, add the group to solved groups
+        if (result.correct && selectedWords.length === 4) {
+          setSolvedGroups(prev => [...prev, [...selectedWords]]);
+        }
+        
         onSelectionResult(result);
         setSelectedWords([]);
       }
@@ -64,49 +87,53 @@ const WordSelection: React.FC<WordSelectionProps> = ({
         padding: '16px',
         minHeight: '400px'
       }}>
-        {words.map((word, index) => (
-          <button
-            key={index}
-            onClick={() => toggleWord(word)}
-            disabled={isSubmitting || solvedWords.includes(word)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              textAlign: 'center',
-              minHeight: '80px',
-              fontSize: '18px',
-              fontWeight: '600',
-              borderRadius: '8px',
-              transition: 'all 0.2s',
-              cursor: (isSubmitting || solvedWords.includes(word)) ? 'not-allowed' : 'pointer',
-              opacity: (isSubmitting || solvedWords.includes(word)) ? 0.5 : 1,
-              backgroundColor: selectedWords.includes(word) 
-                ? '#3b82f6' 
-                : solvedWords.includes(word)
-                ? '#bbf7d0'
-                : '#f3f4f6',
-              color: selectedWords.includes(word) 
-                ? 'white' 
-                : solvedWords.includes(word)
-                ? '#6b7280'
-                : '#1f2937',
-              border: 'none'
-            }}
-            onMouseEnter={(e) => {
-              if (!selectedWords.includes(word) && !solvedWords.includes(word) && !isSubmitting) {
-                e.currentTarget.style.backgroundColor = '#e5e7eb';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!selectedWords.includes(word) && !solvedWords.includes(word)) {
-                e.currentTarget.style.backgroundColor = '#f3f4f6';
-              }
-            }}
-          >
-            {word}
-          </button>
-        ))}
+        {organizedWords.map((word, index) => {
+          const rowIndex = Math.floor(index / 4);
+          const isSolvedGroup = rowIndex < solvedGroups.length;
+          const groupColor = isSolvedGroup ? groupColors[rowIndex] || '#22c55e' : '#f3f4f6';
+          
+          return (
+            <button
+              key={`${word}-${index}`}
+              onClick={() => toggleWord(word)}
+              disabled={!word || isSubmitting || solvedWords.includes(word) || isSolvedGroup}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center',
+                minHeight: '80px',
+                fontSize: '18px',
+                fontWeight: '600',
+                borderRadius: '8px',
+                transition: 'all 0.2s',
+                cursor: (!word || isSubmitting || solvedWords.includes(word) || isSolvedGroup) ? 'not-allowed' : 'pointer',
+                opacity: (!word || isSubmitting || isSolvedGroup) ? 0.7 : 1,
+                backgroundColor: selectedWords.includes(word) 
+                  ? '#3b82f6' 
+                  : groupColor,
+                color: selectedWords.includes(word) 
+                  ? 'white' 
+                  : isSolvedGroup
+                  ? 'white'
+                  : '#1f2937',
+                border: 'none'
+              }}
+              onMouseEnter={(e) => {
+                if (!selectedWords.includes(word) && !isSolvedGroup && word && !isSubmitting) {
+                  e.currentTarget.style.backgroundColor = '#e5e7eb';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!selectedWords.includes(word) && !isSolvedGroup && word) {
+                  e.currentTarget.style.backgroundColor = '#f3f4f6';
+                }
+              }}
+            >
+              {word}
+            </button>
+          );
+        })}
       </div>
       
       {/* Submit button */}
