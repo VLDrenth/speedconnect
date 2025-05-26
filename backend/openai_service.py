@@ -211,8 +211,8 @@ Example:
 
     async def generate_words_for_round(self, game_id: str, round_number: int) -> dict:
         """Generate words for a specific game round (deterministic with caching)"""
-        from .database import get_supabase_client
-        
+        from database import get_supabase_client  # Remove the dot
+    
         seed = self._create_deterministic_seed(game_id, round_number)
         
         try:

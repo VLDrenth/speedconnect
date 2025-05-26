@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Any
 import uuid
 from database import get_supabase
+from openai_service import get_openai_service
 
 app = FastAPI(title="SpeedConnect API", version="1.0.0")
 
@@ -35,34 +36,58 @@ async def health_check():
     return {"status": "healthy"}
 
 @app.post("/games")
-async def create_game(game_data: GameCreate):
+async def create_game(request: dict):
     try:
         supabase = get_supabase()
-        # Insert new game into database
-        result = supabase.table('games').insert({
-            "words": game_data.words,
-            "categories": game_data.categories,
-            "status": "active",
-            "current_round": 1,
-            "timer_start": "NOW()",
-            "timer_duration": 300  # 5 minutes in seconds
-        }).execute()
+        openai_service = get_openai_service()
         
-        if result.data:
-            game = result.data[0]
-            return {
-                "game_id": game["id"],
-                "status": "created",
-                "words": game["words"],
-                "categories": game["categories"],
-                "current_round": game["current_round"],
-                "timer_start": game["timer_start"],
-                "timer_duration": game["timer_duration"]
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Failed to create game")
-            
+        # Create a placeholder game first to get the real game_id
+        placeholder_game = {
+            "words": [],
+            "categories": [],
+            "current_round": 1,
+            "status": "active"  # Use "active" instead of "creating"
+        }
+        
+        result = supabase.table("games").insert(placeholder_game).execute()
+        game_id = result.data[0]["id"]
+        
+        # Now generate words using the real game_id
+        words_data = await openai_service.generate_words_for_round(
+            game_id=game_id,
+            round_number=1
+        )
+        
+        # Extract all words and shuffle them
+        all_words = []
+        categories = []
+        
+        for group in words_data["groups"]:
+            all_words.extend(group["words"])
+            categories.append({
+                "name": group["category"],
+                "words": group["words"],
+                "difficulty": group["difficulty"]
+            })
+        
+        # Shuffle the words for display
+        import random
+        random.shuffle(all_words)
+        
+        # Update the game with actual data
+        supabase.table("games").update({
+            "words": all_words,
+            "categories": categories
+        }).eq("id", game_id).execute()
+        
+        return {
+            "game_id": game_id,
+            "words": all_words,
+            "round": 1
+        }
+        
     except Exception as e:
+        print(f"Error creating game: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/games/{game_id}/join")
@@ -318,9 +343,10 @@ async def player_select_words(game_id: str, player_id: str, selection: WordSelec
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/games/{game_id}/next-round")
-async def start_next_round(game_id: str, game_data: GameCreate):
+async def start_next_round(game_id: str):
     try:
         supabase = get_supabase()
+        openai_service = get_openai_service()
         
         # Check if game exists and is still active
         game_result = supabase.table('games').select("*").eq('id', game_id).eq('status', 'active').execute()
@@ -348,10 +374,32 @@ async def start_next_round(game_id: str, game_data: GameCreate):
         
         next_round = game.get('current_round', 1) + 1
         
+        # Generate new words for the next round using OpenAI
+        words_data = await openai_service.generate_words_for_round(
+            game_id=game_id,
+            round_number=next_round
+        )
+        
+        # Extract all words and shuffle them
+        all_words = []
+        categories = []
+        
+        for group in words_data["groups"]:
+            all_words.extend(group["words"])
+            categories.append({
+                "name": group["category"],
+                "words": group["words"],
+                "difficulty": group["difficulty"]
+            })
+        
+        # Shuffle the words for display
+        import random
+        random.shuffle(all_words)
+        
         # Update game with new round data (but keep timer_start unchanged)
         supabase.table('games').update({
-            'words': game_data.words,
-            'categories': game_data.categories,
+            'words': all_words,
+            'categories': categories,
             'current_round': next_round,
             'status': 'active'
         }).eq('id', game_id).execute()
@@ -365,13 +413,14 @@ async def start_next_round(game_id: str, game_data: GameCreate):
             "game_id": game_id,
             "status": "next_round_started",
             "current_round": next_round,
-            "words": game_data.words,
-            "categories": game_data.categories,
+            "words": all_words,
+            "categories": categories,
             "timer_start": game['timer_start'],
             "timer_duration": game.get('timer_duration', 300)
         }
         
     except Exception as e:
+        print(f"Error starting next round: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/games/{game_id}/complete")
