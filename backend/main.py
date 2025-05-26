@@ -1,3 +1,5 @@
+import asyncio
+import threading
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -35,6 +37,21 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
+def background_word_pregeneration(game_id: str, start_round: int, num_rounds: int = 2):
+    """Pre-generate words for future rounds in the background"""
+    async def _generate_words():
+        openai_service = get_openai_service()
+        for round_num in range(start_round + 1, start_round + num_rounds + 1):
+            try:
+                await openai_service.generate_words_for_round(game_id, round_num)
+                print(f"Pre-generated words for game {game_id}, round {round_num}")
+            except Exception as e:
+                print(f"Failed to pre-generate words for round {round_num}: {e}")
+    
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(_generate_words())
+    loop.close()
+
 @app.post("/games")
 async def create_game(request: dict):
     try:
@@ -46,7 +63,7 @@ async def create_game(request: dict):
             "words": [],
             "categories": [],
             "current_round": 1,
-            "status": "active"  # Use "active" instead of "creating"
+            "status": "active"
         }
         
         result = supabase.table("games").insert(placeholder_game).execute()
@@ -79,6 +96,13 @@ async def create_game(request: dict):
             "words": all_words,
             "categories": categories
         }).eq("id", game_id).execute()
+        
+        # Start background pre-generation of words for next round
+        threading.Thread(
+            target=background_word_pregeneration,
+            args=(game_id, 1),
+            daemon=True
+        ).start()
         
         return {
             "game_id": game_id,
@@ -409,14 +433,19 @@ async def start_next_round(game_id: str):
             'round_mistakes': 0
         }).eq('game_id', game_id).execute()
         
+        # Start background pre-generation for next round
+        if next_round < game.get('max_rounds', 3):  # Only if there are more rounds left
+            threading.Thread(
+                target=background_word_pregeneration,
+                args=(game_id, next_round),
+                daemon=True
+            ).start()
+        
         return {
             "game_id": game_id,
             "status": "next_round_started",
             "current_round": next_round,
-            "words": all_words,
-            "categories": categories,
-            "timer_start": game['timer_start'],
-            "timer_duration": game.get('timer_duration', 300)
+            "words": all_words
         }
         
     except Exception as e:

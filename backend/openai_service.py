@@ -66,19 +66,34 @@ class OpenAIService:
             print(f"Failed to initialize OpenAI client: {e}")
             raise
     
-    def _create_word_generation_prompt(self, seed: str) -> str:
+    def _create_word_generation_prompt(self, seed: str, previous_categories=None) -> str:
         """Create prompt for word generation based on seed"""
+        # Create previous categories text if any
+        prev_categories_text = ""
+        if previous_categories and len(previous_categories) > 0:
+            prev_categories_text = "Previously used categories (AVOID THESE AND SIMILAR ONES):\n"
+            prev_categories_text += "- " + "\n- ".join(previous_categories) + "\n\n"
+        
         return f"""Generate a word puzzle for a Connections-style game. Create exactly 4 groups of 4 words each (16 words total).
 
 Requirements:
-- Each group should have a clear thematic connection
+- Each group should be connected in some way
 - Words should be single words (no phrases)
-- Difficulty should vary: 1 easy, 2 medium, 1 hard group
+- Difficulty should vary: 1 easy, 1 medium, 1 challenging, 1 hard group
+- Groups should not be trivial like colors, instruments, etc.
+- Avoid common categories like animals, fruits, etc.
+- Use creative and unique categories
+- Use words that can have multiple meanings or interpretations
+- Try to use words that are not commonly associated with each other
+- Try to use words that might belong to multiple categories
 - No proper nouns
-- Categories can be completely unrelated to each other
+- Categories should be completely unrelated to each other
 - Include words with multiple meanings to create ambiguity
 - Never use the same word in multiple groups
 - Seed for variation: {seed}
+- Be creative and have fun with the categories!
+
+{prev_categories_text}Use highly varied and creative categories that have not been used before.
 
 Return ONLY valid JSON in this exact format:
 {{
@@ -96,7 +111,7 @@ Return ONLY valid JSON in this exact format:
     {{
       "category": "Group name",
       "words": ["word1", "word2", "word3", "word4"], 
-      "difficulty": "medium"
+      "difficulty": "challenging"
     }},
     {{
       "category": "Group name",
@@ -110,19 +125,19 @@ Example:
 {{
   "groups": [
     {{
-      "category": "Kitchen Utensils",
-      "words": ["fork", "knife", "spoon", "ladle"],
+      "category": "Playfully Poke Fun At",
+      "words": ["kid", "needle", "rib", "tease"],
       "difficulty": "easy"
     }},
     {{
-      "category": "Things that are Green",
-      "words": ["lime", "sage", "mint", "jade"],
+      "category": "Cut Into Pieces",
+      "words": ["chop", "cube", "dice", "mince"],
       "difficulty": "medium"
     }},
     {{
-      "category": "Programming Verbs",
-      "words": ["branching", "forking", "committing", "merging"],
-      "difficulty": "medium"
+      "category": "Classic Still Life Components",
+      "words": ["fruit", "skull", "pitcher", "tablecloth"],
+      "difficulty": "challenging"
     }},
     {{
       "category": "Words that can follow 'Time'",
@@ -167,17 +182,17 @@ Example:
         
         return {"groups": groups}
 
-    async def generate_words(self, seed: str) -> dict:
+    async def generate_words(self, seed: str, previous_categories=None) -> dict:
         """Generate words using OpenAI with given seed"""
         try:
-            prompt = self._create_word_generation_prompt(seed)
+            prompt = self._create_word_generation_prompt(seed, previous_categories)
             
             response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4.1",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
+                temperature=1,  # Increased temperature for more variety
                 max_tokens=1000,
-                timeout=30  # Add timeout
+                timeout=30
             )
             
             content = response.choices[0].message.content.strip()
@@ -211,8 +226,8 @@ Example:
 
     async def generate_words_for_round(self, game_id: str, round_number: int) -> dict:
         """Generate words for a specific game round (deterministic with caching)"""
-        from database import get_supabase_client  # Remove the dot
-    
+        from database import get_supabase_client
+        
         seed = self._create_deterministic_seed(game_id, round_number)
         
         try:
@@ -225,8 +240,22 @@ Example:
                 cached_data = result.data[0]
                 return json.loads(cached_data["words_json"])
             
-            # Generate new words via OpenAI
-            words_data = await self.generate_words(seed)
+            # Get previous rounds' categories to avoid repetition
+            previous_categories = []
+            if round_number > 1:
+                for prev_round in range(1, round_number):
+                    prev_seed = self._create_deterministic_seed(game_id, prev_round)
+                    prev_result = supabase.table("generated_words").select("words_json").eq("seed", prev_seed).execute()
+                    
+                    if prev_result.data:
+                        prev_words_data = json.loads(prev_result.data[0]["words_json"])
+                        for group in prev_words_data.get("groups", []):
+                            category = group.get("category", "").lower()
+                            if category:
+                                previous_categories.append(category)
+            
+            # Generate new words via OpenAI with history context
+            words_data = await self.generate_words(seed, previous_categories)
             
             # Cache in database
             supabase.table("generated_words").insert({
