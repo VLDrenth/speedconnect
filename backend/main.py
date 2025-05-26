@@ -10,10 +10,15 @@ from openai_service import get_openai_service
 
 app = FastAPI(title="SpeedConnect API", version="1.0.0")
 
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",  # React dev server
+    "https://bespoke-cassata-33f4bc.netlify.app/",  # Netlify production
+]
+    
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # React dev server
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
