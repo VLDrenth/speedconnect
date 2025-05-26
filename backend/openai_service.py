@@ -1,4 +1,6 @@
 import os
+import hashlib
+import json
 from typing import Optional
 from pathlib import Path
 
@@ -130,6 +132,41 @@ Example:
   ]
 }}"""
 
+    def _get_fallback_words(self, seed: str) -> dict:
+        """Generate fallback words when OpenAI is unavailable"""
+        import random
+        
+        # Use seed to make fallback deterministic
+        random.seed(seed)
+        
+        # Predefined word pools for fallback
+        word_pools = {
+            "animals": ["cat", "dog", "bird", "fish", "bear", "lion", "tiger", "wolf", "fox", "deer"],
+            "colors": ["red", "blue", "green", "yellow", "purple", "orange", "pink", "brown", "black", "white"],
+            "foods": ["apple", "bread", "cheese", "pizza", "pasta", "rice", "soup", "salad", "cake", "pie"],
+            "sports": ["soccer", "tennis", "golf", "swim", "run", "jump", "throw", "catch", "kick", "hit"],
+            "weather": ["rain", "snow", "sun", "wind", "cloud", "storm", "fog", "ice", "heat", "cold"],
+            "tools": ["hammer", "drill", "saw", "wrench", "nail", "screw", "bolt", "wire", "tape", "glue"],
+            "music": ["piano", "guitar", "drum", "flute", "horn", "violin", "bass", "song", "beat", "note"],
+            "body": ["hand", "foot", "head", "arm", "leg", "eye", "ear", "nose", "mouth", "back"]
+        }
+        
+        # Pick 4 random categories
+        categories = random.sample(list(word_pools.keys()), 4)
+        difficulties = ["easy", "medium", "medium", "hard"]
+        
+        groups = []
+        for i, category in enumerate(categories):
+            # Pick 4 random words from each category
+            words = random.sample(word_pools[category], 4)
+            groups.append({
+                "category": category.title(),
+                "words": words,
+                "difficulty": difficulties[i]
+            })
+        
+        return {"groups": groups}
+
     async def generate_words(self, seed: str) -> dict:
         """Generate words using OpenAI with given seed"""
         try:
@@ -139,13 +176,13 @@ Example:
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=1000
+                max_tokens=1000,
+                timeout=30  # Add timeout
             )
             
             content = response.choices[0].message.content.strip()
             
             # Parse JSON response
-            import json
             result = json.loads(content)
             
             # Validate structure
@@ -162,9 +199,51 @@ Example:
             return result
             
         except Exception as e:
-            print(f"Error generating words: {e}")
-            raise
-    
+            print(f"OpenAI generation failed: {e}")
+            print(f"Falling back to predefined words for seed: {seed}")
+            return self._get_fallback_words(seed)
+
+    def _create_deterministic_seed(self, game_id: str, round_number: int) -> str:
+        """Create deterministic seed from game_id and round_number"""
+        seed_input = f"{game_id}-round-{round_number}"
+        hash_object = hashlib.md5(seed_input.encode())
+        return hash_object.hexdigest()[:16]
+
+    async def generate_words_for_round(self, game_id: str, round_number: int) -> dict:
+        """Generate words for a specific game round (deterministic with caching)"""
+        from .database import get_supabase_client
+        
+        seed = self._create_deterministic_seed(game_id, round_number)
+        
+        try:
+            # Check database first
+            supabase = get_supabase_client()
+            result = supabase.table("generated_words").select("*").eq("seed", seed).execute()
+            
+            if result.data:
+                # Return cached result
+                cached_data = result.data[0]
+                return json.loads(cached_data["words_json"])
+            
+            # Generate new words via OpenAI
+            words_data = await self.generate_words(seed)
+            
+            # Cache in database
+            supabase.table("generated_words").insert({
+                "seed": seed,
+                "game_id": game_id,
+                "round_number": round_number,
+                "words_json": json.dumps(words_data)
+            }).execute()
+            
+            return words_data
+            
+        except Exception as e:
+            print(f"Database operation failed: {e}")
+            print(f"Generating words without caching for seed: {seed}")
+            # If database fails, still try to generate words
+            return await self.generate_words(seed)
+
     def health_check(self) -> dict:
         """Basic health check for OpenAI service"""
         return {
