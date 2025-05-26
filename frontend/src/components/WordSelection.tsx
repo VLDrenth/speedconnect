@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface WordSelectionProps {
   words: string[];
@@ -6,6 +6,8 @@ interface WordSelectionProps {
   playerId: string;
   onSelectionResult: (result: any) => void;
   solvedWords?: string[];
+  gameOver?: boolean; // Add gameOver prop
+  allGroups?: Array<{words: string[], category: string}>; // Add allGroups prop for game over state
 }
 
 const WordSelection: React.FC<WordSelectionProps> = ({ 
@@ -13,16 +15,40 @@ const WordSelection: React.FC<WordSelectionProps> = ({
   gameId, 
   playerId, 
   onSelectionResult,
-  solvedWords = []
+  solvedWords = [],
+  gameOver = false,
+  allGroups = []
 }) => {
   const [selectedWords, setSelectedWords] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Change to store both words and category
   const [solvedGroups, setSolvedGroups] = useState<{words: string[], category: string}[]>([]);
+  const [displayGroups, setDisplayGroups] = useState<{words: string[], category: string, solved: boolean}[]>([]);
 
   // Define colors for each solved group
   const groupColors = ['#22c55e', '#f59e0b', '#ef4444', '#8b5cf6']; // green, amber, red, purple
-
+  
+  // Effect to update displayGroups when game ends
+  useEffect(() => {
+    if (gameOver && allGroups.length > 0) {
+      // Create display groups with indication if they were solved
+      const groups = allGroups.map(group => {
+        const isSolved = solvedGroups.some(
+          solved => solved.category === group.category || 
+          solved.words.every(word => group.words.includes(word))
+        );
+        return {
+          ...group,
+          solved: isSolved
+        };
+      });
+      setDisplayGroups(groups);
+    } else {
+      // During normal gameplay, just use solved groups
+      setDisplayGroups(solvedGroups.map(g => ({...g, solved: true})));
+    }
+  }, [gameOver, allGroups, solvedGroups]);
+  
   // Organize words: solved groups first, then remaining unsolved words
   const organizedWords = React.useMemo(() => {
     const flatSolvedWords = solvedGroups.flatMap(group => group.words);
@@ -37,7 +63,7 @@ const WordSelection: React.FC<WordSelectionProps> = ({
   }, [words, solvedGroups]);
 
   const toggleWord = (word: string) => {
-    if (!word || solvedWords.includes(word)) return;
+    if (!word || solvedWords.includes(word) || gameOver) return;
     
     if (selectedWords.includes(word)) {
       setSelectedWords(selectedWords.filter(w => w !== word));
@@ -47,7 +73,7 @@ const WordSelection: React.FC<WordSelectionProps> = ({
   };
 
   const submitSelection = async () => {
-    if (selectedWords.length !== 4) return;
+    if (selectedWords.length !== 4 || gameOver) return;
 
     setIsSubmitting(true);
     try {
@@ -87,65 +113,71 @@ const WordSelection: React.FC<WordSelectionProps> = ({
         flex: 1,
         display: 'grid',
         gridTemplateColumns: 'repeat(4, 1fr)',
-        gridTemplateRows: `repeat(${4 + solvedGroups.length}, auto)`,
+        gridTemplateRows: `repeat(${4 + displayGroups.length}, auto)`,
         gap: '12px',
         padding: '16px',
         minHeight: '400px'
       }}>
-        {solvedGroups.map((group, groupIndex) => (
-          <React.Fragment key={`group-${groupIndex}`}>
-            {/* Category banner - spans all 4 columns */}
-            <div
-              style={{
-                gridColumn: '1 / span 4',
-                backgroundColor: groupColors[groupIndex % groupColors.length],
-                color: 'white',
-                padding: '8px 12px',
-                borderRadius: '6px',
-                fontWeight: 'bold',
-                textAlign: 'center',
-                marginBottom: '-5px',
-                zIndex: 1
-              }}
-            >
-              {group.category}
-            </div>
-            
-            {/* Words in this solved group */}
-            {group.words.map((word, wordIndex) => (
-              <button
-                key={`solved-${groupIndex}-${wordIndex}`}
-                disabled={true}
+        {displayGroups.map((group, groupIndex) => {
+          const groupColor = group.solved 
+            ? groupColors[groupIndex % groupColors.length] 
+            : '#ef4444'; // Unsolved groups are red
+
+          return (
+            <React.Fragment key={`group-${groupIndex}`}>
+              {/* Category banner - spans all 4 columns */}
+              <div
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  textAlign: 'center',
-                  minHeight: '80px',
-                  fontSize: '18px',
-                  fontWeight: '600',
-                  borderRadius: '8px',
-                  opacity: 0.9,
-                  backgroundColor: groupColors[groupIndex % groupColors.length],
+                  gridColumn: '1 / span 4',
+                  backgroundColor: groupColor,
                   color: 'white',
-                  border: 'none',
-                  cursor: 'not-allowed',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  fontWeight: 'bold',
+                  textAlign: 'center',
+                  marginBottom: '-5px',
+                  zIndex: 1
                 }}
               >
-                {word}
-              </button>
-            ))}
-          </React.Fragment>
-        ))}
+                {group.category}
+              </div>
+              
+              {/* Words in this group */}
+              {group.words.map((word, wordIndex) => (
+                <button
+                  key={`group-word-${groupIndex}-${wordIndex}`}
+                  disabled={true}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center',
+                    minHeight: '80px',
+                    fontSize: '18px',
+                    fontWeight: '600',
+                    borderRadius: '8px',
+                    opacity: group.solved ? 0.9 : 0.8,
+                    backgroundColor: groupColor,
+                    color: 'white',
+                    border: 'none',
+                    cursor: 'not-allowed',
+                  }}
+                >
+                  {word}
+                </button>
+              ))}
+            </React.Fragment>
+          );
+        })}
         
-        {/* Remaining unsolved words */}
-        {words
+        {/* Only show remaining unsolved words when game is not over */}
+        {!gameOver && words
           .filter(word => !solvedGroups.flatMap(g => g.words).includes(word))
           .map((word, index) => (
             <button
               key={`word-${index}`}
               onClick={() => toggleWord(word)}
-              disabled={isSubmitting || solvedWords.includes(word)}
+              disabled={isSubmitting || solvedWords.includes(word) || gameOver}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -156,7 +188,7 @@ const WordSelection: React.FC<WordSelectionProps> = ({
                 fontWeight: '600',
                 borderRadius: '8px',
                 transition: 'all 0.2s',
-                cursor: (isSubmitting || solvedWords.includes(word)) ? 'not-allowed' : 'pointer',
+                cursor: (isSubmitting || solvedWords.includes(word) || gameOver) ? 'not-allowed' : 'pointer',
                 opacity: (isSubmitting) ? 0.7 : 1,
                 backgroundColor: selectedWords.includes(word) ? '#3b82f6' : '#f3f4f6',
                 color: selectedWords.includes(word) ? 'white' : '#1f2937',
@@ -178,35 +210,37 @@ const WordSelection: React.FC<WordSelectionProps> = ({
           ))}
       </div>
       
-      {/* Submit button */}
-      <div style={{ textAlign: 'center', paddingTop: '16px', flexShrink: 0 }}>
-        <button
-          onClick={submitSelection}
-          disabled={selectedWords.length !== 4 || isSubmitting}
-          style={{
-            backgroundColor: selectedWords.length === 4 && !isSubmitting ? '#2563eb' : '#9ca3af',
-            color: 'white',
-            fontWeight: 'bold',
-            padding: '12px 32px',
-            borderRadius: '8px',
-            border: 'none',
-            cursor: selectedWords.length === 4 && !isSubmitting ? 'pointer' : 'not-allowed',
-            fontSize: '16px'
-          }}
-          onMouseEnter={(e) => {
-            if (selectedWords.length === 4 && !isSubmitting) {
-              e.currentTarget.style.backgroundColor = '#1d4ed8';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (selectedWords.length === 4 && !isSubmitting) {
-              e.currentTarget.style.backgroundColor = '#2563eb';
-            }
-          }}
-        >
-          {isSubmitting ? 'Submitting...' : 'Submit Group'}
-        </button>
-      </div>
+      {/* Submit button - hide when game is over */}
+      {!gameOver && (
+        <div style={{ textAlign: 'center', paddingTop: '16px', flexShrink: 0 }}>
+          <button
+            onClick={submitSelection}
+            disabled={selectedWords.length !== 4 || isSubmitting}
+            style={{
+              backgroundColor: selectedWords.length === 4 && !isSubmitting ? '#2563eb' : '#9ca3af',
+              color: 'white',
+              fontWeight: 'bold',
+              padding: '12px 32px',
+              borderRadius: '8px',
+              border: 'none',
+              cursor: selectedWords.length === 4 && !isSubmitting ? 'pointer' : 'not-allowed',
+              fontSize: '16px'
+            }}
+            onMouseEnter={(e) => {
+              if (selectedWords.length === 4 && !isSubmitting) {
+                e.currentTarget.style.backgroundColor = '#1d4ed8';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (selectedWords.length === 4 && !isSubmitting) {
+                e.currentTarget.style.backgroundColor = '#2563eb';
+              }
+            }}
+          >
+            {isSubmitting ? 'Submitting...' : 'Submit Group'}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
