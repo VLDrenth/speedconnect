@@ -32,8 +32,10 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [playerScore, setPlayerScore] = useState(0);
   const [loadingFinalResults, setLoadingFinalResults] = useState(false);
+  const [gameStartTime, setGameStartTime] = useState<Date | null>(null);
   const MAX_MISTAKES = 3;
   const TOTAL_GROUPS = 4;
+  const GAME_DURATION = 300; // 5 minutes in seconds
 
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
@@ -41,11 +43,10 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  const calculateTimeRemaining = (timerStart: string, timerDuration: number): number => {
-    const startTime = new Date(timerStart).getTime();
+  const calculateTimeRemaining = (startTime: Date): number => {
     const currentTime = new Date().getTime();
-    const elapsedSeconds = Math.floor((currentTime - startTime) / 1000);
-    const remaining = Math.max(0, timerDuration - elapsedSeconds);
+    const elapsedSeconds = Math.floor((currentTime - startTime.getTime()) / 1000);
+    const remaining = Math.max(0, GAME_DURATION - elapsedSeconds);
     return remaining;
   };
 
@@ -56,29 +57,15 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
         const data = await response.json();
         setGameData(data);
         
-        // Update timer if game is active
-        if (data.status === 'active' && data.timer_start && data.timer_duration) {
-          const remaining = calculateTimeRemaining(data.timer_start, data.timer_duration);
+        // Initialize game start time if not set and game is active
+        if (data.status === 'active' && !gameStartTime) {
+          const startTime = data.timer_start ? new Date(data.timer_start) : new Date();
+          setGameStartTime(startTime);
+          const remaining = calculateTimeRemaining(startTime);
           setTimeRemaining(remaining);
           
-          if (remaining <= 0 && !isTimeExpired) {
+          if (remaining <= 0) {
             setIsTimeExpired(true);
-            // Trigger game completion
-            setTimeout(() => {
-              fetch(`http://localhost:8000/games/${gameId}/complete`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-              })
-              .then(response => response.json())
-              .then(data => {
-                setGameResult(data);
-              })
-              .catch(error => {
-                console.error('Error fetching final results:', error);
-              });
-            }, 1000);
           }
         }
       }
@@ -89,9 +76,48 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
     }
   };
 
+  // Timer effect - updates every second when game is active
+  useEffect(() => {
+    let timerInterval: ReturnType<typeof setInterval> | undefined;
+    
+    if (gameData?.status === 'active' && gameStartTime && !isTimeExpired) {
+      timerInterval = setInterval(() => {
+        const remaining = calculateTimeRemaining(gameStartTime);
+        setTimeRemaining(remaining);
+        
+        if (remaining <= 0) {
+          setIsTimeExpired(true);
+          clearInterval(timerInterval);
+          
+          // Automatically complete the game when time expires
+          fetch(`http://localhost:8000/games/${gameId}/complete`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          })
+          .then(response => response.json())
+          .then(data => {
+            setGameResult(data);
+            setGameData((prevData: any) => ({ ...prevData, status: 'completed' }));
+          })
+          .catch(error => {
+            console.error('Error completing game due to timeout:', error);
+          });
+        }
+      }, 1000);
+    }
+    
+    return () => {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+      }
+    };
+  }, [gameData?.status, gameStartTime, isTimeExpired, gameId]);
+
   const startNextRound = async () => {
     // Check if time expired before starting next round
-    if (timeRemaining <= 0) {
+    if (timeRemaining <= 0 || isTimeExpired) {
       setIsTimeExpired(true);
       return;
     }
@@ -126,7 +152,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
         fetchGameState();
       } else {
         const error = await response.json();
-        if (error.detail.includes("Time's up")) {
+        if (error.detail && error.detail.includes("Time's up")) {
           setIsTimeExpired(true);
         }
       }
@@ -227,29 +253,6 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
     window.location.href = '/';
   };
 
-  // Timer effect - updates every second when game is active
-  useEffect(() => {
-    let timerInterval: ReturnType<typeof setInterval> | undefined;
-    
-    if (gameData?.status === 'active' && gameData?.timer_start && gameData?.timer_duration && !isTimeExpired) {
-      timerInterval = setInterval(() => {
-        const remaining = calculateTimeRemaining(gameData.timer_start, gameData.timer_duration);
-        setTimeRemaining(remaining);
-        
-        if (remaining <= 0) {
-          setIsTimeExpired(true);
-          clearInterval(timerInterval);
-        }
-      }, 1000);
-    }
-    
-    return () => {
-      if (timerInterval) {
-        clearInterval(timerInterval);
-      }
-    };
-  }, [gameData, isTimeExpired]);
-
   useEffect(() => {
     fetchGameState();
     const interval = setInterval(fetchGameState, 5000);
@@ -261,6 +264,8 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
     setSolvedCategoryNames(new Set());
     setSolvedWords([]);
     setIsTimeExpired(false);
+    setGameStartTime(null);
+    setTimeRemaining(GAME_DURATION);
   }, [gameId]);
 
   if (loading) {
