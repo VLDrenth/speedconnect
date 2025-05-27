@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import config from '../config';
 
 interface WordSelectionProps {
   words: string[];
@@ -6,8 +7,8 @@ interface WordSelectionProps {
   playerId: string;
   onSelectionResult: (result: any) => void;
   solvedWords?: string[];
-  gameOver?: boolean; // Add gameOver prop
-  allGroups?: Array<{words: string[], category: string}>; // Add allGroups prop for game over state
+  gameOver?: boolean;
+  allGroups?: {words: string[], category: string}[];
 }
 
 const WordSelection: React.FC<WordSelectionProps> = ({ 
@@ -55,34 +56,43 @@ const WordSelection: React.FC<WordSelectionProps> = ({
     const unsolvedWords = words.filter(word => !flatSolvedWords.includes(word));
     
     // Fill remaining slots to make 16 total
-    const organized = [...flatSolvedWords, ...unsolvedWords];
-    while (organized.length < 16) {
-      organized.push(''); // Empty slots if needed
+    const totalSlots = 16;
+    const usedSlots = flatSolvedWords.length;
+    const remainingSlots = totalSlots - usedSlots;
+    
+    // Pad with empty strings if needed
+    while (unsolvedWords.length < remainingSlots) {
+      unsolvedWords.push('');
     }
-    return organized.slice(0, 16);
+    
+    return [...flatSolvedWords, ...unsolvedWords.slice(0, remainingSlots)];
   }, [words, solvedGroups]);
 
   const toggleWord = (word: string) => {
-    if (!word || solvedWords.includes(word) || gameOver) return;
+    if (!word || isSubmitting || solvedWords.includes(word) || gameOver) return;
     
-    if (selectedWords.includes(word)) {
-      setSelectedWords(selectedWords.filter(w => w !== word));
-    } else if (selectedWords.length < 4) {
-      setSelectedWords([...selectedWords, word]);
-    }
+    setSelectedWords(prev => 
+      prev.includes(word) 
+        ? prev.filter(w => w !== word)
+        : prev.length < 4 ? [...prev, word] : prev
+    );
   };
 
   const submitSelection = async () => {
-    if (selectedWords.length !== 4 || gameOver) return;
-
+    if (selectedWords.length !== 4 || isSubmitting) return;
+    
     setIsSubmitting(true);
+    
     try {
-      const response = await fetch(`http://localhost:8000/games/${gameId}/players/${playerId}/select`, {
+      const response = await fetch(`${config.API_BASE_URL}/games/${gameId}/submit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ words: selectedWords }),
+        body: JSON.stringify({
+          player_id: playerId,
+          selected_words: selectedWords,
+        }),
       });
 
       if (response.ok) {
@@ -209,7 +219,7 @@ const WordSelection: React.FC<WordSelectionProps> = ({
             </button>
           ))}
       </div>
-      
+
       {/* Submit button - hide when game is over */}
       {!gameOver && (
         <div style={{ textAlign: 'center', paddingTop: '16px', flexShrink: 0 }}>

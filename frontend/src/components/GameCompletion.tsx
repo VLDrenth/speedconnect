@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import config from '../config';
 
 interface GameCompletionProps {
   gameId: string;
@@ -12,7 +13,7 @@ const GameCompletion: React.FC<GameCompletionProps> = ({ gameId, onGameCompleted
     setIsCompleting(true);
     
     try {
-      const response = await fetch(`http://localhost:8000/games/${gameId}/complete`, {
+      const response = await fetch(`${config.API_BASE_URL}/games/${gameId}/complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

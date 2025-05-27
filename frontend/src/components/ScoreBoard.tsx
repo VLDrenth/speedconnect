@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import config from '../config';
 
 interface Player {
   id: string;
@@ -18,7 +19,7 @@ const ScoreBoard: React.FC<ScoreBoardProps> = ({ gameId, currentPlayerId }) => {
 
   const fetchLeaderboard = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/games/${gameId}/leaderboard`);
+      const response = await fetch(`${config.API_BASE_URL}/games/${gameId}/leaderboard`);
       if (response.ok) {
         const data = await response.json();
         setLeaderboard(data.leaderboard);
@@ -49,8 +50,8 @@ const ScoreBoard: React.FC<ScoreBoardProps> = ({ gameId, currentPlayerId }) => {
       
       <div className="space-y-2">
         {leaderboard.map((player, index) => (
-          <div 
-            key={player.id} 
+          <div
+            key={player.id}
             className={`flex justify-between items-center p-3 rounded transition-all ${
               player.id === currentPlayerId 
                 ? 'bg-blue-100 border-2 border-blue-300' 

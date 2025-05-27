@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import config from '../config';
 
 interface GameCreationProps {
   onGameCreated: (gameId: string) => void;
@@ -22,7 +23,7 @@ const GameCreation: React.FC<GameCreationProps> = ({ onGameCreated }) => {
     };
 
     try {
-      const response = await fetch('http://localhost:8000/games', {
+      const response = await fetch(`${config.API_BASE_URL}/games`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

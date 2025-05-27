@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import config from '../config';
 
 interface PlayerJoinProps {
   gameId: string;
@@ -16,7 +17,7 @@ const PlayerJoin: React.FC<PlayerJoinProps> = ({ gameId, onPlayerJoined }) => {
     setIsJoining(true);
 
     try {
-      const response = await fetch(`http://localhost:8000/games/${gameId}/join`, {
+      const response = await fetch(`${config.API_BASE_URL}/games/${gameId}/join`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

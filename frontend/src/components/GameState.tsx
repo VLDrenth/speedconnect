@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import WordSelection from './WordSelection';
 import ScoreBoard from './ScoreBoard';
 import GameCompletion from './GameCompletion';
+import config from '../config';
 
 interface Player {
   id: string;
@@ -52,7 +53,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
 
   const fetchGameState = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/games/${gameId}`);
+      const response = await fetch(`${config.API_BASE_URL}/games/${gameId}`);
       if (response.ok) {
         const data = await response.json();
         setGameData(data);
@@ -90,7 +91,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
           clearInterval(timerInterval);
           
           // Automatically complete the game when time expires
-          fetch(`http://localhost:8000/games/${gameId}/complete`, {
+          fetch(`${config.API_BASE_URL}/games/${gameId}/complete`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -134,7 +135,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
     };
 
     try {
-      const response = await fetch(`http://localhost:8000/games/${gameId}/next-round`, {
+      const response = await fetch(`${config.API_BASE_URL}/games/${gameId}/next-round`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -217,12 +218,12 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
     setLoadingFinalResults(true); // Start loading indicator
 
     Promise.all([
-      fetch(`http://localhost:8000/games/${gameId}/complete`, {
+      fetch(`${config.API_BASE_URL}/games/${gameId}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       }).then(response => response.json()),
       
-      fetch(`http://localhost:8000/games/${gameId}/leaderboard`, {
+      fetch(`${config.API_BASE_URL}/games/${gameId}/leaderboard`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       }).then(response => response.json())
