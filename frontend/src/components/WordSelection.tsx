@@ -50,24 +50,6 @@ const WordSelection: React.FC<WordSelectionProps> = ({
     }
   }, [gameOver, allGroups, solvedGroups]);
   
-  // Organize words: solved groups first, then remaining unsolved words
-  const organizedWords = React.useMemo(() => {
-    const flatSolvedWords = solvedGroups.flatMap(group => group.words);
-    const unsolvedWords = words.filter(word => !flatSolvedWords.includes(word));
-    
-    // Fill remaining slots to make 16 total
-    const totalSlots = 16;
-    const usedSlots = flatSolvedWords.length;
-    const remainingSlots = totalSlots - usedSlots;
-    
-    // Pad with empty strings if needed
-    while (unsolvedWords.length < remainingSlots) {
-      unsolvedWords.push('');
-    }
-    
-    return [...flatSolvedWords, ...unsolvedWords.slice(0, remainingSlots)];
-  }, [words, solvedGroups]);
-
   const toggleWord = (word: string) => {
     if (!word || isSubmitting || solvedWords.includes(word) || gameOver) return;
     
