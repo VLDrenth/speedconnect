@@ -12,7 +12,9 @@ app = FastAPI(title="SpeedConnect API", version="1.0.0")
 
 ALLOWED_ORIGINS = [
     "http://localhost:3000",  # React dev server
-    "https://bespoke-cassata-33f4bc.netlify.app/",  # Netlify production
+    "https://bespoke-cassata-33f4bc.netlify.app",  # Netlify production (remove trailing slash)
+    "https://your-render-app.onrender.com",  # Your Render backend URL
+    "https://*.netlify.app",  # Allow all Netlify subdomains
 ]
     
 # Configure CORS
