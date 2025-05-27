@@ -34,6 +34,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
   const [playerScore, setPlayerScore] = useState(0);
   const [loadingFinalResults, setLoadingFinalResults] = useState(false);
   const [gameStartTime, setGameStartTime] = useState<Date | null>(null);
+  const [timerInitialized, setTimerInitialized] = useState(false); // Track if timer has been initialized
   const MAX_MISTAKES = 3;
   const TOTAL_GROUPS = 4;
   const GAME_DURATION = 300; // 5 minutes in seconds
@@ -58,16 +59,24 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
         const data = await response.json();
         setGameData(data);
         
-        // Initialize game start time if not set and game is active
-        if (data.status === 'active' && !gameStartTime) {
+        // Only initialize timer once when game is first loaded or becomes active
+        if (data.status === 'active' && !timerInitialized) {
           const startTime = data.timer_start ? new Date(data.timer_start) : new Date();
           setGameStartTime(startTime);
+          setTimerInitialized(true); // Mark timer as initialized
+          
+          // Calculate initial remaining time
           const remaining = calculateTimeRemaining(startTime);
           setTimeRemaining(remaining);
           
           if (remaining <= 0) {
             setIsTimeExpired(true);
           }
+        }
+        
+        // Check if game has been completed by the backend (due to timeout or other reasons)
+        if (data.status === 'completed' && !isTimeExpired) {
+          setIsTimeExpired(true);
         }
       }
     } catch (error) {
@@ -81,12 +90,12 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
   useEffect(() => {
     let timerInterval: ReturnType<typeof setInterval> | undefined;
     
-    if (gameData?.status === 'active' && gameStartTime && !isTimeExpired) {
+    if (gameData?.status === 'active' && gameStartTime && !isTimeExpired && timerInitialized) {
       timerInterval = setInterval(() => {
         const remaining = calculateTimeRemaining(gameStartTime);
         setTimeRemaining(remaining);
         
-        if (remaining <= 0) {
+        if (remaining <= 0 && !isTimeExpired) {
           setIsTimeExpired(true);
           clearInterval(timerInterval);
           
@@ -114,7 +123,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
         clearInterval(timerInterval);
       }
     };
-  }, [gameData?.status, gameStartTime, isTimeExpired, gameId]);
+  }, [gameData?.status, gameStartTime, isTimeExpired, gameId, timerInitialized]);
 
   const startNextRound = async () => {
     // Check if time expired before starting next round
@@ -260,6 +269,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
     return () => clearInterval(interval);
   }, [gameId]);
 
+  // Reset timer initialization when gameId changes
   useEffect(() => {
     setIsEliminated(false);
     setSolvedCategoryNames(new Set());
@@ -267,6 +277,7 @@ const GameState: React.FC<GameStateProps> = ({ gameId, currentPlayer, onBackToMe
     setIsTimeExpired(false);
     setGameStartTime(null);
     setTimeRemaining(GAME_DURATION);
+    setTimerInitialized(false); // Reset timer initialization flag
   }, [gameId]);
 
   if (loading) {
