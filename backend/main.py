@@ -66,11 +66,14 @@ async def create_game(request: dict):
         openai_service = get_openai_service()
         
         # Create a placeholder game first to get the real game_id
+        # Include timer_start and timer_duration from the beginning
         placeholder_game = {
             "words": [],
             "categories": [],
             "current_round": 1,
-            "status": "active"
+            "status": "active",
+            "timer_start": "NOW()",  # Set timer start to current timestamp
+            "timer_duration": 300    # 5 minutes in seconds
         }
         
         result = supabase.table("games").insert(placeholder_game).execute()
@@ -120,7 +123,7 @@ async def create_game(request: dict):
     except Exception as e:
         print(f"Error creating game: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
+    
 @app.post("/games/{game_id}/join")
 async def join_game(game_id: str, player_data: PlayerJoin):
     try:
