@@ -79,21 +79,7 @@ class OpenAIService:
 Requirements:
 - Each group should be connected in some way
 - Words should be single words (no phrases)
-- Difficulty should vary: 1 easy, 1 medium, 1 challenging, 1 hard group
-- Groups should not be trivial like colors, instruments, etc.
-- Avoid common categories like animals, fruits, etc.
-- Use creative and unique categories
-- Use words that can have multiple meanings or interpretations
-- Try to use words that are not commonly associated with each other
-- Try to use words that might belong to multiple categories
-- No proper nouns
-- Categories should be completely unrelated to each other
-- Include words with multiple meanings to create ambiguity
-- Never use the same word in multiple groups
-- Seed for variation: {seed}
-- Be creative and have fun with the categories!
-- MAKE THE CATEGORIES VERY EASY AND OBVIOUS AND TRIVIAL (TESTING)
-
+- Difficulty should vary: 1 easy, 1 medium, 1 medium-hard, 1 hard
 {prev_categories_text}Use highly varied and creative categories that have not been used before.
 
 Return ONLY valid JSON in this exact format:
@@ -146,7 +132,130 @@ Example:
       "difficulty": "hard"
     }}
   ]
-}}"""
+}}
+Use the guide below for generating the words:
+🔗 Connections Puzzle Templates (Condensed Guide)
+
+1. "Things That ___"
+Shared trait or action.
+E.g.:
+- Are White: SNOW, MILK, POLAR BEAR, BABY POWDER
+- You Can Crack: EGG, CODE, JOKE, WHIP
+- Roar: LION, ENGINE, CROWD, KATY PERRY
+
+2. “___ + Word” or “Word + ___”
+Common prefixes/suffixes.
+E.g.:
+- ___ MAIL: JUNK, CHAIN, SNAIL, ELECTRONIC
+- FOOT ___: LOCKER, PRINT, BALL, HILLS
+- SWEDISH ___: FISH, CHEF, MEATBALL, MASSAGE
+
+3. Category Members
+Concrete groupings.
+E.g.:
+- Cards: ACE, KING, QUEEN, JACK
+- Pizza Types: PLAIN, HAWAIIAN, VEGGIE, SUPREME
+- Gum Flavors: WINTERGREEN, CINNAMON, BUBBLEGUM, MENTHOL
+
+4. Synonyms/Similar Meanings
+Roughly equivalent terms.
+E.g.:
+- Punch: SLUG, SOCK, POUND, POP
+- Steal: SWIPE, PINCH, POCKET, NICK
+
+5. Parts of a Whole
+Components of something larger.
+E.g.:
+- Shoe: HEEL, TONGUE, UPPER, SOLE
+- Tree: BRANCH, LEAF, ROOT, TRUNK
+
+6. Associated With [Topic]
+Strong thematic link.
+E.g.:
+- Dracula: BAT, FANG, CASTLE, CAPE
+- Bulls: JORDAN, RODEO, TAURUS, WALL STREET
+
+7. Wordplay
+7a. Homophones
+E.g.: HEAL (heel), TOW (toe), BAWL (ball)
+
+7b. Letter Changes
+E.g.: GUMMY → RUMMY, CARS → MARS, SIMBA → SAMBA
+
+7c. Hidden Words / Endings / Prefixes
+E.g.:
+- Ends in weapons: GRIMACE (mace), RAINBOW (bow)
+- Starts with silent letters: GNOME, KNEE, PSYCHE, MNEMONIC
+
+8. Pop Culture / Media
+E.g.:
+- Titular Animals: BABE, DUMBO, TED, BOLT
+- Pan Characters (Second Words): BELL, HOOK, PAN, DARLING
+
+9. Professional/Technical
+E.g.:
+- Guitar Techniques: SLIDE, PICK, BEND, STRUM
+- Display Settings: TINT, COLOR, BRIGHTNESS, CONTRAST
+- Electrometers: VOLTAGE, CURRENT, RESISTANCE, CHARGE
+
+10. Common Items
+E.g.:
+- Baby Gear: BOTTLE, BIB, STROLLER, MONITOR
+- Barn Items: HORSE, PITCHFORK, BALE, TROUGH
+
+11. Measurements / Units
+E.g.:
+- Beer: SIX-PACK, FORTY, CASE, GROWLER
+- Hair Amounts: TUFT, LOCK, THATCH, SHOCK
+
+12. Abstract Concepts
+E.g.:
+- Reputation: FACE, IMAGE, REGARD, STANDING
+- Vigor: PEP, ZIP, ENERGY, BEANS
+
+13. Names
+E.g.:
+- Bobs: ROSS, DOLE, HOPE, MARLEY
+- Williams(es): VENUS, TENNESSEE, ROBIN, HANK
+
+14. Location-Based
+E.g.:
+- Monopoly Spaces: AVENUE, RAILROAD, UTILITY, CHANCE
+- Valley Types: DELL, GLEN, HOLLOW, DALE
+
+15. Special / Meta
+15a. “What _ Might Mean”
+E.g.:
+- “Diamond”: SUIT, INFIELD, GEMSTONE, RHOMBUS
+- “A”: EXCELLENT, ONE, ATHLETIC, AREA
+
+15b. Abbreviations
+E.g.:
+- “E” Words: MAIL, COMMERCE, SIGNATURE, SCOOTER
+
+15c. Numbers as Symbols
+E.g.:
+- 420 → CANNABIS, 007 → BOND, 666 → DEVIL
+
+🧠 Misdirection Techniques
+- Multi-Valid: ROCK, BANK, SPRING
+- False Sets: 3 real + 1 fake (e.g., 3 card games + 1 board game)
+- Overlaps: Music terms vs. Instruments, etc.
+
+🎯 Difficulty Guidelines
+1. Easy: Obvious categories, no tricks
+2. Medium: Less direct, light wordplay
+3. Hard: Specific knowledge, tricky themes
+4. Very Hard: Obscure/complex wordplay, meta themes
+
+🧪 Puzzle Design Tips
+- Start Hard, then fill easier sets
+- Red Herrings: 2–3 per puzzle
+- Balance Types: Mix categories and mechanisms
+- Uniqueness Check: One correct grouping per set
+- Puzzle Flow: Place obvious clues to mislead
+- Avoid Repeats: No same categories in same game
+"""
 
     def _get_fallback_words(self, seed: str) -> dict:
         """Generate fallback words when OpenAI is unavailable"""
