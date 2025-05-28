@@ -77,186 +77,122 @@ class OpenAIService:
         return f"""Generate a word puzzle for a Connections-style game. Create exactly 4 groups of 4 words each (16 words total).
 
 Requirements:
-- Each group should be connected in some way
-- Words should be single words (no phrases)
-- Difficulty should vary: 1 easy, 1 medium, 1 medium-hard, 1 hard
-{prev_categories_text}Use highly varied and creative categories that have not been used before.
+- Single words only (no phrases)
+- Include 2-3 RED HERRING words that could fit multiple categories
+- Make categories clever and non-obvious
+- Difficulty levels: 1 easy, 1 medium, 1 challenging, 1 hard
+{prev_categories_text}
+
+IMPORTANT: Avoid basic categories like "colors", "animals", "fruits". Use creative connections!
 
 Return ONLY valid JSON in this exact format:
 {{
   "groups": [
-    {{
-      "category": "Group name",
-      "words": ["word1", "word2", "word3", "word4"],
-      "difficulty": "easy"
-    }},
-    {{
-      "category": "Group name", 
-      "words": ["word1", "word2", "word3", "word4"],
-      "difficulty": "medium"
-    }},
-    {{
-      "category": "Group name",
-      "words": ["word1", "word2", "word3", "word4"], 
-      "difficulty": "challenging"
-    }},
-    {{
-      "category": "Group name",
-      "words": ["word1", "word2", "word3", "word4"],
-      "difficulty": "hard"
-    }}
+    {{"category": "name", "words": ["w1","w2","w3","w4"], "difficulty": "easy"}},
+    {{"category": "name", "words": ["w1","w2","w3","w4"], "difficulty": "medium"}},
+    {{"category": "name", "words": ["w1","w2","w3","w4"], "difficulty": "challenging"}},
+    {{"category": "name", "words": ["w1","w2","w3","w4"], "difficulty": "hard"}}
   ]
 }}
 
-Example:
+Example of GOOD puzzle with misdirection:
 {{
   "groups": [
     {{
-      "category": "Playfully Poke Fun At",
-      "words": ["kid", "needle", "rib", "tease"],
+      "category": "Poker Actions",
+      "words": ["call", "fold", "raise", "check"],
       "difficulty": "easy"
     }},
     {{
-      "category": "Cut Into Pieces",
-      "words": ["chop", "cube", "dice", "mince"],
+      "category": "Things with Hands",
+      "words": ["clock", "dealer", "crew", "deck"],
       "difficulty": "medium"
     }},
     {{
-      "category": "Classic Still Life Components",
-      "words": ["fruit", "skull", "pitcher", "tablecloth"],
+      "category": "Ends with Punctuation Marks",
+      "words": ["interrobang", "yahoo", "period", "colon"],
       "difficulty": "challenging"
     }},
     {{
-      "category": "Words that can follow 'Time'",
-      "words": ["zone", "bomb", "stamp", "keeper"],
+      "category": "Anagrams of Emotions",
+      "words": ["raced", "vole", "grane", "paphy"],
       "difficulty": "hard"
     }}
   ]
 }}
-Use the guide below for generating the words:
-🔗 Connections Puzzle Templates (Condensed Guide)
 
-1. "Things That ___"
-Shared trait or action.
-E.g.:
-- Are White: SNOW, MILK, POLAR BEAR, BABY POWDER
-- You Can Crack: EGG, CODE, JOKE, WHIP
-- Roar: LION, ENGINE, CROWD, KATY PERRY
+Note how "dealer" and "deck" could fit poker theme but don't. "Period" and "colon" seem medical but aren't.
 
-2. “___ + Word” or “Word + ___”
-Common prefixes/suffixes.
-E.g.:
-- ___ MAIL: JUNK, CHAIN, SNAIL, ELECTRONIC
-- FOOT ___: LOCKER, PRINT, BALL, HILLS
-- SWEDISH ___: FISH, CHEF, MEATBALL, MASSAGE
+Use these advanced patterns:
+CORE TEMPLATE TYPES
+1. Things That ___ - four items sharing an action, property, or trait
+   e.g. things you can crack → CODE, EGG, JOKE, WHIP
 
-3. Category Members
-Concrete groupings.
-E.g.:
-- Cards: ACE, KING, QUEEN, JACK
-- Pizza Types: PLAIN, HAWAIIAN, VEGGIE, SUPREME
-- Gum Flavors: WINTERGREEN, CINNAMON, BUBBLEGUM, MENTHOL
+2. ___ + Word - common prefix/suffix groupings  
+   e.g. ___ MAIL → CHAIN, ELECTRONIC, JUNK, SNAIL
 
-4. Synonyms/Similar Meanings
-Roughly equivalent terms.
-E.g.:
-- Punch: SLUG, SOCK, POUND, POP
-- Steal: SWIPE, PINCH, POCKET, NICK
+3. Category Members - four members of the same set  
+   e.g. playing cards → ACE, JACK, KING, QUEEN
 
-5. Parts of a Whole
-Components of something larger.
-E.g.:
-- Shoe: HEEL, TONGUE, UPPER, SOLE
-- Tree: BRANCH, LEAF, ROOT, TRUNK
+4. Synonyms - four near‑synonyms  
+   e.g. steal → NICK, PINCH, POCKET, SWIPE
 
-6. Associated With [Topic]
-Strong thematic link.
-E.g.:
-- Dracula: BAT, FANG, CASTLE, CAPE
-- Bulls: JORDAN, RODEO, TAURUS, WALL STREET
+5. Parts of a Whole - components of one object  
+   e.g. parts of a shoe → HEEL, SOLE, TONGUE, UPPER
 
-7. Wordplay
-7a. Homophones
-E.g.: HEAL (heel), TOW (toe), BAWL (ball)
+6. Associated With X - items tightly linked to a topic  
+   e.g. Count Dracula → BAT, CAPE, CASTLE, FANG
 
-7b. Letter Changes
-E.g.: GUMMY → RUMMY, CARS → MARS, SIMBA → SAMBA
+7. Wordplay  
+   • Homophones (BALL/BAWL)  
+   • Single‑letter or vowel shifts (GIN→DIN)  
+   • Hidden endings/beginnings (WOOD, GLASS…)
 
-7c. Hidden Words / Endings / Prefixes
-E.g.:
-- Ends in weapons: GRIMACE (mace), RAINBOW (bow)
-- Starts with silent letters: GNOME, KNEE, PSYCHE, MNEMONIC
+8. Pop‑Culture Sets - film, TV, literature, etc.  
+   e.g. Batman villains → BANE, JOKER, PENGUIN, SCARECROW
 
-8. Pop Culture / Media
-E.g.:
-- Titular Animals: BABE, DUMBO, TED, BOLT
-- Pan Characters (Second Words): BELL, HOOK, PAN, DARLING
+9. Professional/Technical - jargon within a field  
+   e.g. TV display settings → BRIGHTNESS, COLOR, CONTRAST, TINT
 
-9. Professional/Technical
-E.g.:
-- Guitar Techniques: SLIDE, PICK, BEND, STRUM
-- Display Settings: TINT, COLOR, BRIGHTNESS, CONTRAST
-- Electrometers: VOLTAGE, CURRENT, RESISTANCE, CHARGE
+10. Common Objects - everyday items from one context  
+    e.g. baby gear → BIB, BOTTLE, MONITOR, STROLLER
 
-10. Common Items
-E.g.:
-- Baby Gear: BOTTLE, BIB, STROLLER, MONITOR
-- Barn Items: HORSE, PITCHFORK, BALE, TROUGH
+11. Units & Measures - related quantities  
+    e.g. British weights → DRAM, OUNCE, POUND, STONE
 
-11. Measurements / Units
-E.g.:
-- Beer: SIX-PACK, FORTY, CASE, GROWLER
-- Hair Amounts: TUFT, LOCK, THATCH, SHOCK
+12. Abstract Concepts - related intangibles  
+    e.g. reputation → FACE, IMAGE, REGARD, STANDING
 
-12. Abstract Concepts
-E.g.:
-- Reputation: FACE, IMAGE, REGARD, STANDING
-- Vigor: PEP, ZIP, ENERGY, BEANS
+13. Names - people sharing a tag  
+    e.g. Bobs → DOLE, HOPE, MARLEY, ROSS
 
-13. Names
-E.g.:
-- Bobs: ROSS, DOLE, HOPE, MARLEY
-- Williams(es): VENUS, TENNESSEE, ROBIN, HANK
+14. Locations - places or place-derived terms  
+    e.g. Monopoly spaces → AVENUE, CHANCE, RAILROAD, UTILITY
 
-14. Location-Based
-E.g.:
-- Monopoly Spaces: AVENUE, RAILROAD, UTILITY, CHANCE
-- Valley Types: DELL, GLEN, HOLLOW, DALE
+15. Special  
+    • “What X Can Mean” (e.g. DIAMOND → GEM, FIELD, SHAPE, SUIT)  
+    • Contractions/abbreviations (HELL, ILL, SHELL, WELL)  
+    • Numeric stand-ins (BOND: 007, WEED: 420
 
-15. Special / Meta
-15a. “What _ Might Mean”
-E.g.:
-- “Diamond”: SUIT, INFIELD, GEMSTONE, RHOMBUS
-- “A”: EXCELLENT, ONE, ATHLETIC, AREA
+MISDIRECTION TECHNIQUES
+• Multiple Fits - words eligible for >1 group (BANK, ROCK, SPRING).  
+• False Groups - 3 genuine + 1 impostor (three card games + UNO).  
+• Overlapping Themes - e.g. music terms vs. instruments.
 
-15b. Abbreviations
-E.g.:
-- “E” Words: MAIL, COMMERCE, SIGNATURE, SCOOTER
+DIFFICULTY LEVELS
+1 Easy - direct categories, no wordplay.  
+2 Moderate - compound words, light trivia.  
+3 Hard - niche knowledge or light wordplay.  
+4 Very Hard - heavy wordplay, obscurity, multistep links.
 
-15c. Numbers as Symbols
-E.g.:
-- 420 → CANNABIS, 007 → BOND, 666 → DEVIL
-
-🧠 Misdirection Techniques
-- Multi-Valid: ROCK, BANK, SPRING
-- False Sets: 3 real + 1 fake (e.g., 3 card games + 1 board game)
-- Overlaps: Music terms vs. Instruments, etc.
-
-🎯 Difficulty Guidelines
-1. Easy: Obvious categories, no tricks
-2. Medium: Less direct, light wordplay
-3. Hard: Specific knowledge, tricky themes
-4. Very Hard: Obscure/complex wordplay, meta themes
-
-🧪 Puzzle Design Tips
-- Start Hard, then fill easier sets
-- Red Herrings: 2–3 per puzzle
-- Balance Types: Mix categories and mechanisms
-- Uniqueness Check: One correct grouping per set
-- Puzzle Flow: Place obvious clues to mislead
-- Avoid Repeats: No same categories in same game
+CONSTRUCTION WORKFLOW
+1. Start with the hardest set to anchor misdirection.  
+2. Plant 2-3 red herring words that straddle categories.  
+3. Mix template types for variety.  
+4. Verify uniqueness - each quartet must be the only clean solution.  
+5. Manage flow - leave one semi obvious set to lure solvers down wrong paths.
+6. Never include very straightforward categories, always require some thinking
 """
-
     def _get_fallback_words(self, seed: str) -> dict:
         """Generate fallback words when OpenAI is unavailable"""
         import random
@@ -300,7 +236,7 @@ E.g.:
             response = self.client.chat.completions.create(
                 model="gpt-4.1",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=1,  # Increased temperature for more variety
+                temperature=1.2,  # Increased temperature for more variety
                 max_tokens=1000,
                 timeout=30
             )
