@@ -1,5 +1,7 @@
 # SpeedConnect
 
+🔗 **Play Now: [Speedconnect](https://bespoke-cassata-33f4bc.netlify.app)**
+
 A fast-paced, real-time multiplayer word connections game where players race against time to identify groups of related words. Inspired by the popular NYT Connections puzzle, SpeedConnect adds competitive multiplayer elements and AI-generated content for when one puzzle a day is not enough.
 
 ## 🎮 Game Overview
